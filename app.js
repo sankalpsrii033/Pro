@@ -479,3 +479,24 @@ function loadTradingView(symbol = "NASDAQ:NVDA") {
   });
 
 }
+function loadTradingView(symbol) {
+
+    const container = document.getElementById("tradingview-widget-container");
+
+    container.innerHTML = `
+        <div id="tv_chart"></div>
+    `;
+
+    new TradingView.widget({
+        width: "100%",
+        height: 600,
+        symbol: symbol,
+        interval: "D",
+        timezone: "exchange",
+        theme: "dark",
+        style: "1",
+        locale: "en",
+        allow_symbol_change: true,
+        container_id: "tv_chart"
+    });
+}
