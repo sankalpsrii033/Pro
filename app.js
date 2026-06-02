@@ -25,7 +25,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function initializeApp() {
   loadSettings();
-
+loadTradingView()
   if ($("settingsBtn")) {
     $("settingsBtn").addEventListener("click", openSettings);
   }
@@ -447,4 +447,35 @@ function formatMarkdown(text) {
   return text
     .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
     .replace(/\n/g, "<br>");
+}
+
+// ==========================
+// TradingView Widget
+// ==========================
+
+function loadTradingView(symbol = "NASDAQ:NVDA") {
+
+  const chart = document.getElementById("tradingview_chart");
+
+  if (!chart) return;
+
+  chart.innerHTML = "";
+
+  if (typeof TradingView === "undefined") {
+    console.log("TradingView not loaded");
+    return;
+  }
+
+  new TradingView.widget({
+    autosize: true,
+    symbol: symbol,
+    interval: "D",
+    timezone: "Etc/UTC",
+    theme: "dark",
+    style: "1",
+    locale: "en",
+    allow_symbol_change: true,
+    container_id: "tradingview_chart"
+  });
+
 }
