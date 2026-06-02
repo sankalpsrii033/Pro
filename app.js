@@ -254,16 +254,30 @@ async function callOpenRouter(prompt) {
       },
       body: JSON.stringify({
         model,
+        max_tokens: 250,
+  temperature: 0.4,
         messages: [
-          {
-            role: "system",
-            content: "You are Trade GPT Pro."
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ]
+  {
+    role: "system",
+    content: `
+You are Trade GPT Pro Support Assistant.
+
+Rules:
+- Answer in plain English.
+- Maximum 100 words.
+- No markdown.
+- No tables.
+- No code blocks.
+- No technical formatting.
+- Keep answers short and mobile friendly.
+- Only help with Trade GPT Pro usage.
+`
+  },
+  {
+    role: "user",
+    content: prompt
+  }
+]
       })
     }
   );
@@ -335,14 +349,23 @@ async function sendChatMessage() {
 
   try {
     const reply = await callOpenRouter(
-      `
-You are the Trade GPT Pro Help Assistant.
+`
+You are Trade GPT Pro Support Assistant.
 
-Answer the following question:
-
+Rules:
+- Answer in plain English or in pointers
+- Maximum 100 words.
+- No markdown.
+- No tables.
+- No code blocks.
+- No technical formatting.
+- Keep answers short and mobile friendly.
+- Only help with Trade GPT Pro usage.
+- you know everythinga about the system which you have to explain to the user
+User Question:
 ${message}
 `
-    );
+);
 
     addChatMessage("Assistant", reply);
   } catch (error) {
@@ -360,10 +383,12 @@ function addChatMessage(sender, text) {
 
   wrapper.style.marginBottom = "12px";
 
-  wrapper.innerHTML = `
-    <strong>${sender}:</strong><br>
-    ${escapeHtml(text)}
-  `;
+wrapper.innerHTML = `
+<div class="chat-message">
+  <strong>${sender}</strong>
+  <div>${escapeHtml(text).replace(/\n/g,"<br>")}</div>
+</div>
+`;
 
   history.appendChild(wrapper);
 
