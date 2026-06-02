@@ -132,7 +132,7 @@ async function runAnalysis() {
 
     const result = await callOpenRouter(prompt);
 
-    $("reportOutput").textContent = result;
+    $("reportOutput").innerHTML = marked.parse(result);
   } catch (error) {
     console.error(error);
 
