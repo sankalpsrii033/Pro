@@ -408,6 +408,11 @@ Add OpenRouter API key
 for live AI-powered reports.
 `;
 }
+function formatMarkdown(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\n/g, "<br>");
+}
 
 // ----------------------------
 // Utilities
