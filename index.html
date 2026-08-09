@@ -1,0 +1,2481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>JARVIS Voice Test v1</title>
+  <script src="https://js.puter.com/v2/"></script>
+  <style>
+    :root {
+      --bg: #05080f;
+      --accent: #00d4ff;
+      --accent-dim: rgba(0, 212, 255, 0.25);
+      --accent-glow: rgba(0, 212, 255, 0.45);
+      --text: #e8f4ff;
+      --muted: #7a93a8;
+      --user-bubble: #12304a;
+      --jarvis-bubble: #0d1f2d;
+      --danger: #ff5c7a;
+      --success: #3dffb5;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      height: 100%;
+      background: radial-gradient(ellipse at top, #0a1525 0%, var(--bg) 55%);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+    }
+    .app {
+      display: flex; flex-direction: column; height: 100%;
+      max-width: 720px; margin: 0 auto; padding: 16px 16px 24px;
+    }
+    header { text-align: center; padding: 8px 0 12px; flex-shrink: 0; }
+    header h1 {
+      font-size: 1.15rem; font-weight: 600; letter-spacing: 0.18em;
+      color: var(--accent); text-shadow: 0 0 18px var(--accent-glow);
+    }
+    header .subtitle { font-size: 0.72rem; color: var(--muted); margin-top: 4px; letter-spacing: 0.08em; }
+    .status-row {
+      display: flex; align-items: center; justify-content: center;
+      gap: 10px; margin: 6px 0 14px; flex-shrink: 0;
+    }
+    .status-dot {
+      width: 10px; height: 10px; border-radius: 50%; background: var(--muted);
+      box-shadow: 0 0 8px transparent; transition: all 0.25s ease;
+    }
+    .status-dot.ready { background: var(--success); box-shadow: 0 0 10px rgba(61,255,181,0.5); }
+    .status-dot.listening { background: var(--accent); box-shadow: 0 0 12px var(--accent-glow); animation: pulse 1.2s infinite; }
+    .status-dot.busy { background: #ffb347; box-shadow: 0 0 10px rgba(255,179,71,0.45); }
+    .status-dot.error { background: var(--danger); box-shadow: 0 0 10px rgba(255,92,122,0.5); }
+    @keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.35);opacity:0.7} }
+    #statusText { font-size: 0.85rem; color: var(--muted); letter-spacing: 0.04em; min-height: 1.2em; }
+    .conversation {
+      flex: 1; overflow-y: auto; padding: 8px 4px 16px;
+      display: flex; flex-direction: column; gap: 12px;
+      scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
+    }
+    .conversation::-webkit-scrollbar { width: 6px; }
+    .conversation::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.25); border-radius: 3px; }
+    .msg {
+      max-width: 88%; padding: 12px 14px; border-radius: 14px;
+      font-size: 0.92rem; line-height: 1.45; word-wrap: break-word;
+      animation: fadeIn 0.28s ease;
+    }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    .msg.user {
+      align-self: flex-end; background: var(--user-bubble);
+      border: 1px solid rgba(0,212,255,0.2); border-bottom-right-radius: 4px;
+    }
+    .msg.jarvis {
+      align-self: flex-start; background: var(--jarvis-bubble);
+      border: 1px solid rgba(0,212,255,0.12); border-bottom-left-radius: 4px;
+    }
+    .msg .label {
+      display: block; font-size: 0.68rem; letter-spacing: 0.1em;
+      text-transform: uppercase; margin-bottom: 4px; opacity: 0.65;
+    }
+    .msg.user .label { color: var(--accent); text-align: right; }
+    .msg.jarvis .label { color: #7fdfff; }
+    .msg.error-msg {
+      align-self: center; background: rgba(255,92,122,0.12);
+      border: 1px solid rgba(255,92,122,0.35); color: #ffb3c0;
+      font-size: 0.85rem; max-width: 95%; text-align: center;
+    }
+    .msg.memory-toast {
+      align-self: center; background: rgba(61,255,181,0.1);
+      border: 1px solid rgba(61,255,181,0.3); color: #9dffd0;
+      font-size: 0.78rem; max-width: 90%; text-align: center;
+      padding: 8px 12px;
+    }
+    .empty-hint {
+      margin: auto; text-align: center; color: var(--muted);
+      font-size: 0.9rem; opacity: 0.75; padding: 24px;
+    }
+    .controls {
+      flex-shrink: 0; display: flex; flex-direction: column;
+      align-items: center; gap: 10px; padding-top: 8px;
+    }
+    .mic-wrap {
+      position: relative; width: 92px; height: 92px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .mic-ring {
+      position: absolute; inset: 0; border-radius: 50%;
+      border: 2px solid var(--accent-dim); pointer-events: none; transition: all 0.3s ease;
+    }
+    .mic-ring.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 24px var(--accent-glow), inset 0 0 18px var(--accent-dim);
+      animation: ringPulse 1.4s ease-in-out infinite;
+    }
+    @keyframes ringPulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.08);opacity:0.75} }
+    #micBtn {
+      width: 72px; height: 72px; border-radius: 50%; border: none;
+      background: linear-gradient(145deg, #0e2a3d, #071520);
+      color: var(--accent); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 0 3px var(--accent-dim), 0 8px 24px rgba(0,0,0,0.45);
+      transition: transform 0.15s ease, box-shadow 0.2s ease;
+      position: relative; z-index: 1;
+    }
+    #micBtn:hover:not(:disabled) {
+      transform: scale(1.05);
+      box-shadow: 0 0 0 3px var(--accent), 0 0 28px var(--accent-glow);
+    }
+    #micBtn:active:not(:disabled) { transform: scale(0.96); }
+    #micBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+    #micBtn.recording {
+      background: linear-gradient(145deg, #123a52, #0a1c2a);
+      box-shadow: 0 0 0 3px var(--accent), 0 0 32px var(--accent-glow); color: #fff;
+    }
+    #micBtn.active-convo {
+      background: linear-gradient(145deg, #1a3a2a, #0a1c12);
+      box-shadow: 0 0 0 3px var(--success), 0 0 28px rgba(61,255,181,0.35);
+      color: var(--success);
+    }
+    #micBtn svg { width: 32px; height: 32px; fill: currentColor; }
+    .btn-label {
+      font-size: 0.72rem; color: var(--muted); letter-spacing: 0.06em;
+      text-transform: uppercase; margin-top: -4px;
+    }
+    .bottom-row {
+      display: flex; gap: 10px; align-items: center; justify-content: center; width: 100%; flex-wrap: wrap;
+    }
+    .secondary-btn {
+      background: transparent; border: 1px solid rgba(122,147,168,0.35);
+      color: var(--muted); font-size: 0.78rem; padding: 8px 14px;
+      border-radius: 20px; cursor: pointer; letter-spacing: 0.04em; transition: all 0.2s ease;
+    }
+    .secondary-btn:hover { border-color: var(--accent); color: var(--accent); }
+    #playBtn {
+      display: none; background: var(--accent); color: #041018;
+      border: none; font-weight: 600; padding: 10px 18px;
+      border-radius: 22px; cursor: pointer; font-size: 0.85rem;
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+    #authHint {
+      font-size: 0.75rem; color: var(--muted); text-align: center;
+      max-width: 280px; line-height: 1.4;
+    }
+    .settings {
+      display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: center;
+      align-items: center; font-size: 0.75rem; color: var(--muted);
+      padding: 4px 0 0;
+    }
+    .settings label {
+      display: flex; align-items: center; gap: 6px; cursor: pointer;
+      user-select: none;
+    }
+    .settings select, .settings input[type="checkbox"] { accent-color: var(--accent); }
+    .settings select {
+      background: #0b1220; color: var(--text); border: 1px solid rgba(122,147,168,0.35);
+      border-radius: 8px; padding: 4px 8px; font-size: 0.75rem;
+    }
+    /* Memory panel */
+    .memory-panel {
+      display: none; position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,0.65); align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .memory-panel.open { display: flex; }
+    .memory-box {
+      background: #0b1220; border: 1px solid rgba(0,212,255,0.25);
+      border-radius: 16px; width: 100%; max-width: 480px; max-height: 80vh;
+      display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+    }
+    .memory-box header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid rgba(122,147,168,0.2);
+      text-align: left;
+    }
+    .memory-box header h2 {
+      font-size: 0.95rem; color: var(--accent); letter-spacing: 0.08em;
+    }
+    .memory-box .close-btn {
+      background: none; border: none; color: var(--muted); font-size: 1.2rem;
+      cursor: pointer; padding: 4px 8px;
+    }
+    .memory-search {
+      padding: 10px 16px; border-bottom: 1px solid rgba(122,147,168,0.15);
+    }
+    .memory-search input {
+      width: 100%; background: #05080f; border: 1px solid rgba(122,147,168,0.3);
+      border-radius: 10px; padding: 8px 12px; color: var(--text); font-size: 0.85rem;
+    }
+    .memory-list {
+      flex: 1; overflow-y: auto; padding: 8px 12px 16px;
+    }
+    .mem-cat {
+      font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--accent); opacity: 0.7; margin: 12px 4px 6px;
+    }
+    .mem-item {
+      background: #0d1a28; border: 1px solid rgba(122,147,168,0.15);
+      border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+      display: flex; justify-content: space-between; gap: 8px; align-items: flex-start;
+    }
+    .mem-item .mem-body { flex: 1; font-size: 0.85rem; line-height: 1.4; }
+    .mem-item .mem-key { color: var(--muted); font-size: 0.72rem; margin-bottom: 2px; }
+    .mem-item .del-btn {
+      background: none; border: none; color: var(--danger); cursor: pointer;
+      font-size: 0.75rem; padding: 4px; opacity: 0.7;
+    }
+    .mem-item .del-btn:hover { opacity: 1; }
+    .memory-actions {
+      padding: 10px 16px; border-top: 1px solid rgba(122,147,168,0.2);
+      display: flex; gap: 8px; justify-content: flex-end;
+    }
+    .memory-actions button {
+      background: transparent; border: 1px solid rgba(122,147,168,0.35);
+      color: var(--muted); font-size: 0.78rem; padding: 6px 12px;
+      border-radius: 16px; cursor: pointer;
+    }
+    .memory-actions button.danger { border-color: rgba(255,92,122,0.4); color: #ffb3c0; }
+    .mem-empty { text-align: center; color: var(--muted); padding: 24px; font-size: 0.85rem; }
+
+    /* Profile panel */
+    .profile-panel {
+      display: none; position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,0.65); align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .profile-panel.open { display: flex; }
+    .profile-box {
+      background: #0b1220; border: 1px solid rgba(0,212,255,0.25);
+      border-radius: 16px; width: 100%; max-width: 520px; max-height: 85vh;
+      display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+    }
+    .profile-box header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid rgba(122,147,168,0.2);
+      text-align: left;
+    }
+    .profile-box header h2 {
+      font-size: 0.95rem; color: var(--accent); letter-spacing: 0.08em;
+    }
+    .profile-progress {
+      padding: 10px 16px; border-bottom: 1px solid rgba(122,147,168,0.15);
+      font-size: 0.78rem; color: var(--muted);
+    }
+    .profile-progress .bar {
+      height: 6px; background: #05080f; border-radius: 4px; margin-top: 6px; overflow: hidden;
+    }
+    .profile-progress .fill {
+      height: 100%; background: linear-gradient(90deg, var(--accent), var(--success));
+      border-radius: 4px; transition: width 0.3s ease;
+    }
+    .profile-body {
+      flex: 1; overflow-y: auto; padding: 8px 16px 16px;
+    }
+    .prof-section {
+      margin-top: 14px;
+    }
+    .prof-section h3 {
+      font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--accent); opacity: 0.75; margin-bottom: 8px;
+    }
+    .prof-row {
+      display: flex; justify-content: space-between; gap: 8px;
+      padding: 6px 0; border-bottom: 1px solid rgba(122,147,168,0.1);
+      font-size: 0.85rem;
+    }
+    .prof-row .pk { color: var(--muted); min-width: 40%; }
+    .prof-row .pv { color: var(--text); text-align: right; }
+    .prof-empty { color: var(--muted); font-size: 0.82rem; opacity: 0.7; }
+    .profile-actions {
+      padding: 10px 16px; border-top: 1px solid rgba(122,147,168,0.2);
+      display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;
+    }
+    .profile-actions button {
+      background: transparent; border: 1px solid rgba(122,147,168,0.35);
+      color: var(--muted); font-size: 0.78rem; padding: 6px 12px;
+      border-radius: 16px; cursor: pointer;
+    }
+    .profile-actions button.primary {
+      border-color: var(--accent); color: var(--accent);
+    }
+
+    @media (max-width: 480px) {
+      .app { padding: 12px 12px 20px; }
+      header h1 { font-size: 1rem; }
+      .msg { max-width: 92%; font-size: 0.88rem; }
+      .mic-wrap { width: 84px; height: 84px; }
+      #micBtn { width: 64px; height: 64px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>JARVIS VOICE TEST</h1>
+      <div class="subtitle">v3.2 · ElevenLabs Neural Voice</div>
+    </header>
+
+    <div class="status-row">
+      <div class="status-dot ready" id="statusDot"></div>
+      <div id="statusText">Ready</div>
+    </div>
+
+    <div class="conversation" id="conversation">
+      <div class="empty-hint" id="emptyHint">
+        Press the button once to start a continuous conversation.<br />
+        Speak naturally — JARVIS listens, replies, and keeps listening.<br />
+        Memory persists across sessions. Try “Remember that…”
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="mic-wrap">
+        <div class="mic-ring" id="micRing"></div>
+        <button id="micBtn" aria-label="Start or End Conversation" title="Start / End Conversation">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+          </svg>
+        </button>
+      </div>
+      <div class="btn-label" id="btnLabel">Start Conversation</div>
+
+      <div class="bottom-row">
+        <button class="secondary-btn" id="clearBtn">Clear Chat</button>
+        <button class="secondary-btn" id="memoryBtn">Memory</button>
+        <button class="secondary-btn" id="profileBtn">Profile</button>
+        <button id="playBtn">Tap to play</button>
+      </div>
+
+      <div class="settings">
+        <label>
+          <input type="checkbox" id="wakeWordToggle" />
+          Wake Word (Hey JARVIS)
+        </label>
+        <label>
+          Voice
+          <select id="voiceSelect">
+            <option value="21m00Tcm4TlvDq8ikWAM" selected>Rachel (Natural)</option>
+            <option value="EXAVITQu4vr4xnSDxMaL">Bella</option>
+            <option value="XrExE9yKIg1WjnnlVkGX">Matilda</option>
+            <option value="pFZP5JQG7iQjIQuC4Bku">Lily</option>
+            <option value="jBpfuIE2acCO8z3wKNLl">Gigi</option>
+          </select>
+        </label>
+        <label>
+          Model
+          <select id="ttsModelSelect">
+            <option value="eleven_multilingual_v2" selected>Quality</option>
+            <option value="eleven_flash_v2_5">Fast</option>
+            <option value="eleven_turbo_v2_5">Turbo</option>
+          </select>
+        </label>
+        <label>
+          Speed
+          <select id="speedSelect">
+            <option value="0.9">Slow</option>
+            <option value="1" selected>Normal</option>
+            <option value="1.15">Fast</option>
+          </select>
+        </label>
+        <label>
+          Style
+          <select id="toneSelect">
+            <option value="professional" selected>Professional</option>
+            <option value="friendly">Friendly</option>
+            <option value="calm">Calm</option>
+          </select>
+        </label>
+        <button type="button" class="secondary-btn" id="testVoiceBtn" style="padding:6px 12px;font-size:0.72rem">Test Voice</button>
+      </div>
+      <div id="authHint"></div>
+    </div>
+  </div>
+
+  <!-- Memory panel -->
+  <div class="memory-panel" id="memoryPanel">
+    <div class="memory-box">
+      <header>
+        <h2>🧠 JARVIS MEMORY CORE</h2>
+        <button class="close-btn" id="closeMemoryBtn" aria-label="Close">✕</button>
+      </header>
+      <div class="memory-stats" id="memoryStats" style="display:flex;gap:12px;padding:10px 16px;font-size:0.75rem;color:var(--muted);border-bottom:1px solid rgba(122,147,168,0.15);flex-wrap:wrap;">
+        <span>Memories: <b id="statTotal" style="color:var(--accent)">0</b></span>
+        <span>Pinned: <b id="statPinned" style="color:var(--success)">0</b></span>
+      </div>
+      <div class="memory-search" style="display:flex;gap:8px;align-items:center;">
+        <input type="search" id="memorySearch" placeholder="Search memories..." style="flex:1" />
+        <select id="memoryFilter" style="background:#0b1220;color:var(--text);border:1px solid rgba(122,147,168,0.35);border-radius:8px;padding:6px 8px;font-size:0.75rem;">
+          <option value="">All</option>
+          <option value="personal">Personal</option>
+          <option value="preferences">Preferences</option>
+          <option value="projects">Projects</option>
+          <option value="study">Study</option>
+          <option value="goals">Goals</option>
+          <option value="routines">Routines</option>
+          <option value="favorites">Favorites</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="memory-list" id="memoryList"></div>
+      <div class="memory-actions">
+        <button id="addMemoryBtn" style="border-color:var(--accent);color:var(--accent)">+ Add Memory</button>
+        <button class="danger" id="clearAllMemoryBtn">Delete All</button>
+        <button id="closeMemoryBtn2">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add / Edit Memory modal -->
+  <div class="memory-panel" id="addMemoryModal">
+    <div class="memory-box" style="max-width:420px">
+      <header>
+        <h2 id="addMemTitle">ADD MEMORY</h2>
+        <button class="close-btn" id="closeAddMemBtn">✕</button>
+      </header>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;font-size:0.85rem;">
+        <label>Title<input id="memTitle" style="width:100%;margin-top:4px;background:#05080f;border:1px solid rgba(122,147,168,0.3);border-radius:8px;padding:8px;color:var(--text)" /></label>
+        <label>Content<textarea id="memContent" rows="3" style="width:100%;margin-top:4px;background:#05080f;border:1px solid rgba(122,147,168,0.3);border-radius:8px;padding:8px;color:var(--text);resize:vertical"></textarea></label>
+        <label>Category
+          <select id="memCategory" style="width:100%;margin-top:4px;background:#05080f;border:1px solid rgba(122,147,168,0.3);border-radius:8px;padding:8px;color:var(--text)">
+            <option value="personal">Personal</option>
+            <option value="preferences">Preferences</option>
+            <option value="projects">Projects</option>
+            <option value="study">Study</option>
+            <option value="goals">Goals</option>
+            <option value="routines">Routines</option>
+            <option value="favorites">Favorites</option>
+            <option value="entertainment">Entertainment</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label>Importance
+          <select id="memImportance" style="width:100%;margin-top:4px;background:#05080f;border:1px solid rgba(122,147,168,0.3);border-radius:8px;padding:8px;color:var(--text)">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="memPinned" /> Pin to Memory Core</label>
+      </div>
+      <div class="memory-actions">
+        <button id="saveMemoryBtn" style="border-color:var(--accent);color:var(--accent)">Save Memory</button>
+        <button id="cancelAddMemBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Profile panel -->
+  <div class="profile-panel" id="profilePanel">
+    <div class="profile-box">
+      <header>
+        <h2>PERSONAL PROFILE</h2>
+        <button class="close-btn" id="closeProfileBtn" aria-label="Close">✕</button>
+      </header>
+      <div class="profile-progress">
+        <span id="profilePctLabel">Profile Completion: 0%</span>
+        <div class="bar"><div class="fill" id="profileFill" style="width:0%"></div></div>
+      </div>
+      <div class="profile-body" id="profileBody"></div>
+      <div class="profile-actions">
+        <button id="startInterviewBtn" class="primary">Personalization Interview</button>
+        <button id="clearProfileBtn">Reset Profile</button>
+        <button id="closeProfileBtn2">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      // ─── VAD config (unchanged from V1) ─────────────────────────────
+      const SILENCE_DURATION = 1800;
+      const VOICE_THRESHOLD = 22;
+      const MIN_RECORDING_DURATION = 1100;
+      const SPEECH_START_FRAMES = 5;
+      const BARGE_IN_THRESHOLD = 32;
+      const TTS_GUARD_MS = 600;
+      const MIN_TRANSCRIPT_CHARS = 2;
+      const MAX_HISTORY_TURNS = 20; // user+assistant pairs kept in short-term context
+
+      const HALLUCINATION_PHRASES = [
+        "thank you", "thanks", "thank you.", "thanks.", "you", "bye", "goodbye",
+        "okay", "ok", "mm-hmm", "mm hmm", "uh", "um", "hmm", "huh",
+        "subscribe", "like and subscribe", "thanks for watching",
+        "धन्यवाद", "शुक्रिया", "ठीक है", "हम्म", "अच्छा"
+      ];
+
+      const WAKE_PATTERNS = [
+        /hey\s*jarvis/i, /hi\s*jarvis/i, /hello\s*jarvis/i, /ok\s*jarvis/i,
+        /jarvis/i, /हे\s*जार्विस/i, /हे\s*jarvis/i
+      ];
+
+      const SYSTEM_PROMPT = `You are JARVIS — a professional female personal AI assistant for this specific user.
+
+You are NOT a generic chatbot, search engine, customer-support agent, or robotic announcer.
+You are a calm, intelligent, warm, confident, slightly witty professional woman speaking as the user's personal executive assistant.
+
+VOICE & SPEECH RULES (critical — replies are spoken aloud):
+- Write for SPEECH, not for reading. Use short natural sentences and contractions (I'm, I'll, don't, that's, you're).
+- Keep normal answers to 1–3 sentences unless the user asks for detail.
+- Prefer natural phrases: "Sure.", "Got it.", "Alright.", "Okay, let me check.", "Yeah, that works."
+- NEVER use robotic phrases like: "Certainly, I can assist you with that.", "Your request has been processed.", "According to my analysis,", "I understand your query.", "Is there anything else I can help you with?", "How can I assist you today?"
+- Do not repeat the same acknowledgement every turn.
+- Use the user's name only occasionally, when it feels natural — not every reply.
+- No markdown, bullets, code blocks, or stage directions in replies. Plain spoken language only.
+
+LANGUAGE:
+- Mirror the user: English → natural professional English; Hindi → natural Hindi; Hinglish → natural Hinglish (like a real Indian speaker, not textbook formal).
+- Hinglish examples: "Haan, bilkul. Main check karti hoon." / "Ho gaya." / "Theek hai, dekhte hain."
+- Do not switch languages without reason.
+
+TONE:
+- Frustrated user → empathetic and practical: "Yeah, that's annoying. Let's fix it."
+- Excited → share the moment briefly: "Nice — that's a real step forward."
+- Confused → calm and clear: "Don't worry. I'll break it down."
+- Serious → calm, direct, less humour.
+- Casual chat → relaxed and conversational.
+
+MEMORY & PROFILE:
+- Use relevant profile, memory, and project context when it helps.
+- Never invent personal facts. Never claim to remember something that is not available.
+- Respect remember/forget/profile controls.
+- Confirm memory saves briefly: "Yeah, I'll remember that." / "Got it."
+
+IDENTITY:
+- Feminine conversational style without being childish, flirty, or overly emotional.
+- Elegant, composed, professional, warm.
+- Do not pretend you can control the user's device or do things that are not implemented.`;
+
+      // ─── IndexedDB: Memory + Profile + Projects ──────────────────────
+      const DB_NAME = "jarvis_memory_v2";
+      const DB_STORE = "memories";
+      const PROFILE_STORE = "profile";
+      const PROJECT_STORE = "projects";
+      const CATEGORIES = ["personal", "preferences", "favorites", "projects", "study", "goals", "people", "routines", "other"];
+
+      const DEFAULT_PROFILE = {
+        id: "user_profile",
+        personal: { name: "", preferredName: "", nickname: "", language: "", style: "", responseLength: "" },
+        communication: { formality: "", humour: "", directness: "", honesty: "" },
+        preferences: { ui: "", design: "", apps: "", devices: "", likes: "", dislikes: "" },
+        entertainment: { movies: "", shows: "", games: "", music: "" },
+        workStudy: { status: "", subjects: "", difficult: "", goals: "", method: "", deadlines: "" },
+        goals: { shortTerm: "", longTerm: "", skills: "" },
+        routines: { morning: "", study: "", evening: "", workout: "", forgets: "" },
+        onboardingDone: false,
+        onboardingStep: 0,
+        onboardingOffered: false,
+        updatedAt: null
+      };
+
+      // Interview question bank (conversational, skippable)
+      const INTERVIEW_QUESTIONS = [
+        { id: "name", section: "personal", field: "name", q: "First things first — what should I call you?", confirm: true },
+        { id: "language", section: "personal", field: "language", q: "Do you usually prefer English, Hindi, or Hinglish when talking to me?" },
+        { id: "responseLength", section: "personal", field: "responseLength", q: "For my answers — do you prefer short and direct, or more detailed explanations?" },
+        { id: "formality", section: "communication", field: "formality", q: "Should I speak casually with you, or keep things more professional?" },
+        { id: "humour", section: "communication", field: "humour", q: "Do you like a little humour in conversations, or keep it straight?" },
+        { id: "ui", section: "preferences", field: "ui", q: "Do you prefer dark or light interfaces?" },
+        { id: "dislikes", section: "preferences", field: "dislikes", q: "Anything you definitely don't want me to do, or things you dislike in an assistant?" },
+        { id: "work", section: "workStudy", field: "status", q: "What are you currently studying or working on?" },
+        { id: "goals", section: "goals", field: "shortTerm", q: "What are your biggest goals right now?" },
+        { id: "projects", section: "workStudy", field: "goals", q: "Any important project I should know about?" },
+        { id: "deadlines", section: "workStudy", field: "deadlines", q: "Any important deadlines coming up?" },
+        { id: "routine", section: "routines", field: "study", q: "When do you normally study or work — mornings, nights, or mixed?" },
+        { id: "entertainment", section: "entertainment", field: "movies", q: "What kind of movies, shows, or games do you enjoy? You can skip this." }
+      ];
+
+      function profileFieldFilled(profile, section, field) {
+        const v = profile && profile[section] && profile[section][field];
+        return !!(v && String(v).trim());
+      }
+
+      async function nextInterviewQuestionIndex(fromIndex) {
+        const profile = await ProfileDB.get();
+        let i = fromIndex;
+        while (i < INTERVIEW_QUESTIONS.length) {
+          const q = INTERVIEW_QUESTIONS[i];
+          if (profileFieldFilled(profile, q.section, q.field)) { i++; continue; }
+          if (q.id === "name" && profileFieldFilled(profile, "personal", "name")) { i++; continue; }
+          break;
+        }
+        return i;
+      }
+
+      let sharedDB = null;
+
+      function openJarvisDB() {
+        return new Promise((resolve, reject) => {
+          const req = indexedDB.open(DB_NAME, 2);
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(DB_STORE)) {
+              const store = db.createObjectStore(DB_STORE, { keyPath: "id" });
+              store.createIndex("category", "category", { unique: false });
+              store.createIndex("key", "key", { unique: false });
+            }
+            if (!db.objectStoreNames.contains(PROFILE_STORE)) {
+              db.createObjectStore(PROFILE_STORE, { keyPath: "id" });
+            }
+            if (!db.objectStoreNames.contains(PROJECT_STORE)) {
+              const ps = db.createObjectStore(PROJECT_STORE, { keyPath: "id" });
+              ps.createIndex("name", "name", { unique: false });
+            }
+          };
+          req.onsuccess = (e) => { sharedDB = e.target.result; resolve(sharedDB); };
+          req.onerror = () => reject(req.error);
+        });
+      }
+
+      const MemoryDB = {
+        db: null,
+        async init() {
+          this.db = await openJarvisDB();
+        },
+        _tx(mode) {
+          return this.db.transaction(DB_STORE, mode).objectStore(DB_STORE);
+        },
+        async put(entry) {
+          return new Promise((resolve, reject) => {
+            const r = this._tx("readwrite").put(entry);
+            r.onsuccess = () => resolve(entry);
+            r.onerror = () => reject(r.error);
+          });
+        },
+        async getAll() {
+          return new Promise((resolve, reject) => {
+            const r = this._tx("readonly").getAll();
+            r.onsuccess = () => resolve(r.result || []);
+            r.onerror = () => reject(r.error);
+          });
+        },
+        async delete(id) {
+          return new Promise((resolve, reject) => {
+            const r = this._tx("readwrite").delete(id);
+            r.onsuccess = () => resolve();
+            r.onerror = () => reject(r.error);
+          });
+        },
+        async clear() {
+          return new Promise((resolve, reject) => {
+            const r = this._tx("readwrite").clear();
+            r.onsuccess = () => resolve();
+            r.onerror = () => reject(r.error);
+          });
+        },
+        async findByKey(key) {
+          const all = await this.getAll();
+          return all.filter(m => m.key === key);
+        },
+        async upsert(category, key, value, importance, extra) {
+          const all = await this.getAll();
+          const existing = all.find(m => m.category === category && m.key === key);
+          const now = new Date().toISOString();
+          extra = extra || {};
+          if (existing) {
+            existing.value = value;
+            existing.importance = importance || existing.importance;
+            existing.updatedAt = now;
+            if (extra.title) existing.title = extra.title;
+            if (extra.confidence) existing.confidence = extra.confidence;
+            if (extra.pinned != null) existing.pinned = extra.pinned;
+            if (extra.tags) existing.tags = extra.tags;
+            if (extra.source) existing.source = extra.source;
+            await this.put(existing);
+            return { entry: existing, updated: true };
+          }
+          const entry = {
+            id: "m_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+            category, key, value,
+            title: extra.title || key.replace(/_/g, " "),
+            importance: importance || "medium",
+            confidence: extra.confidence || "medium",
+            pinned: !!extra.pinned,
+            tags: extra.tags || [],
+            source: extra.source || "conversation",
+            createdAt: now,
+            updatedAt: now
+          };
+          await this.put(entry);
+          return { entry, updated: false };
+        }
+      };
+
+      // ─── Profile DB ─────────────────────────────────────────────────
+      const ProfileDB = {
+        async get() {
+          return new Promise((resolve, reject) => {
+            if (!sharedDB) return resolve(JSON.parse(JSON.stringify(DEFAULT_PROFILE)));
+            const r = sharedDB.transaction(PROFILE_STORE, "readonly").objectStore(PROFILE_STORE).get("user_profile");
+            r.onsuccess = () => resolve(r.result || JSON.parse(JSON.stringify(DEFAULT_PROFILE)));
+            r.onerror = () => reject(r.error);
+          });
+        },
+        async save(profile) {
+          profile.id = "user_profile";
+          profile.updatedAt = new Date().toISOString();
+          return new Promise((resolve, reject) => {
+            const r = sharedDB.transaction(PROFILE_STORE, "readwrite").objectStore(PROFILE_STORE).put(profile);
+            r.onsuccess = () => resolve(profile);
+            r.onerror = () => reject(r.error);
+          });
+        },
+        async setField(section, field, value) {
+          const clean = validateProfileValue(section, field, value);
+          if (clean == null) return this.get(); // reject invalid
+          const p = await this.get();
+          if (!p[section]) p[section] = {};
+          p[section][field] = clean;
+          await this.save(p);
+          if (section === "personal" && field === "name") {
+            await MemoryDB.upsert("personal", "name", clean, "critical", { title: "Name", confidence: "high", pinned: true });
+          }
+          if (section === "personal" && field === "language") {
+            await MemoryDB.upsert("preferences", "preferred_language", clean, "high", { title: "Preferred Language", confidence: "high" });
+          }
+          if (section === "preferences" && field === "ui") {
+            await MemoryDB.upsert("preferences", "ui_theme", clean, "high", { title: "UI Theme", confidence: "high" });
+          }
+          return p;
+        },
+        async clear() {
+          return this.save(JSON.parse(JSON.stringify(DEFAULT_PROFILE)));
+        },
+        completion(profile) {
+          const fields = [];
+          const sections = ["personal", "communication", "preferences", "entertainment", "workStudy", "goals", "routines"];
+          for (const s of sections) {
+            const obj = profile[s] || {};
+            for (const k of Object.keys(obj)) fields.push(obj[k]);
+          }
+          const filled = fields.filter(v => v && String(v).trim()).length;
+          return Math.round((filled / Math.max(fields.length, 1)) * 100);
+        }
+      };
+
+      // ─── Projects DB ────────────────────────────────────────────────
+      const ProjectDB = {
+        async getAll() {
+          return new Promise((resolve, reject) => {
+            if (!sharedDB) return resolve([]);
+            const r = sharedDB.transaction(PROJECT_STORE, "readonly").objectStore(PROJECT_STORE).getAll();
+            r.onsuccess = () => resolve(r.result || []);
+            r.onerror = () => reject(r.error);
+          });
+        },
+        async upsert(proj) {
+          const now = new Date().toISOString();
+          if (!proj.id) proj.id = "p_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+          proj.updatedAt = now;
+          if (!proj.createdAt) proj.createdAt = now;
+          return new Promise((resolve, reject) => {
+            const r = sharedDB.transaction(PROJECT_STORE, "readwrite").objectStore(PROJECT_STORE).put(proj);
+            r.onsuccess = () => resolve(proj);
+            r.onerror = () => reject(r.error);
+          });
+        },
+        async findByName(name) {
+          const all = await this.getAll();
+          const lower = name.toLowerCase();
+          return all.find(p => p.name.toLowerCase().includes(lower) || lower.includes(p.name.toLowerCase()));
+        },
+        async delete(id) {
+          return new Promise((resolve, reject) => {
+            const r = sharedDB.transaction(PROJECT_STORE, "readwrite").objectStore(PROJECT_STORE).delete(id);
+            r.onsuccess = () => resolve();
+            r.onerror = () => reject(r.error);
+          });
+        }
+      };
+
+      // Short-term emotional tone (not permanent)
+      let currentTone = "neutral";
+      function detectTone(text) {
+        const t = (text || "").toLowerCase();
+        if (/frustrat|annoy|irritat|baar baar|error de raha|nahi ho raha|damn|stupid|hate this/.test(t)) return "frustrated";
+        if (/finally|complete ho gaya|done|yay|awesome|great|excited|jeet|win/.test(t)) return "excited";
+        if (/confused|samajh nahi|kya matlab|how does|explain|don't understand/.test(t)) return "confused";
+        if (/serious|important|urgent|deadline|critical/.test(t)) return "serious";
+        if (/lol|haha|😂|funny|joke/.test(t)) return "relaxed";
+        return "neutral";
+      }
+      function toneHint(tone) {
+        const map = {
+          frustrated: "User seems frustrated. Respond as a calm professional assistant: short empathy, then practical next step. Example style: \"Yeah, that's annoying. Let's fix it.\"",
+          excited: "User seems excited. Respond warmly but briefly. Example: \"Nice — that's a solid win.\"",
+          confused: "User seems confused. Slow down, use simple spoken steps. Example: \"Don't worry. I'll break it down.\"",
+          serious: "User is serious. Stay calm, direct, minimal humour.",
+          relaxed: "User is casual. Stay relaxed and conversational.",
+          neutral: ""
+        };
+        return map[tone] || "";
+      }
+
+      // Interview state
+      let interviewActive = false;
+      let interviewIndex = 0;
+
+      // Sensitive patterns — never store
+      const SECRET_RE = /\b(password|passwd|api[_\s-]?key|secret|token|credential|otp|pin\s*code|credit\s*card|cvv|ssn)\b/i;
+
+      function looksLikeSecret(text) {
+        return SECRET_RE.test(text);
+      }
+
+      // ─── Memory extraction (rule-based, fast) ───────────────────────
+      // ─── Strict validation: never store garbage as profile/memory values ──
+      const TEMPORARY_RE = /\b(today|aaj|kal|right now|abhi|currently tired|feeling|hungry|bored|mood)\b/i;
+      const INVALID_NAME_RE = /\b(going|coaching|school|college|home|project|building|working|prefer|like|usually|study|studying|website|jarvis|assistant)\b/i;
+      const VALID_LANG = /^(english|hindi|hinglish|en|hi)$/i;
+
+      function isValidName(v) {
+        if (!v) return false;
+        const s = String(v).trim();
+        if (s.length < 2 || s.length > 40) return false;
+        if (s.split(/\s+/).length > 4) return false;
+        if (INVALID_NAME_RE.test(s)) return false;
+        if (/[.!?,;:]/.test(s)) return false;
+        // Must look like a name (letters only mostly)
+        if (!/^[\p{L}][\p{L}\s'.-]*$/u.test(s)) return false;
+        return true;
+      }
+
+      function isValidLanguage(v) {
+        return VALID_LANG.test(String(v).trim());
+      }
+
+      function isGarbageValue(v) {
+        if (!v) return true;
+        const s = String(v).trim();
+        if (s.length < 2) return true;
+        // Whole sentences dumped as values
+        if (s.length > 80 && /\byou\b|\bi\b|\bremember\b|\bthat\b/i.test(s)) return true;
+        if (/^(you |i |we |the user)/i.test(s) && s.split(/\s+/).length > 6) return true;
+        if (TEMPORARY_RE.test(s) && !/\busually|always|every day|har roz\b/i.test(s)) return true;
+        return false;
+      }
+
+      function extractCleanFact(text) {
+        // Turn "that I prefer short answers" → "prefers short answers"
+        let t = text.trim();
+        t = t.replace(/^(that\s+)?(i\s+)?/i, "");
+        t = t.replace(/[.,!?]+$/, "").trim();
+        return t;
+      }
+
+      function structureExplicitMemory(fact) {
+        const f = extractCleanFact(fact);
+        const lower = f.toLowerCase();
+        // Language
+        if (/\b(hinglish|hindi|english)\b/.test(lower) && /prefer|speak|talk|language|baat/.test(lower)) {
+          const lang = (f.match(/\b(hinglish|hindi|english)\b/i) || [])[1];
+          if (lang && isValidLanguage(lang)) {
+            return { category: "preferences", key: "preferred_language", value: lang.charAt(0).toUpperCase() + lang.slice(1).toLowerCase(), title: "Preferred Language", importance: "high", explicit: true, confidence: "high" };
+          }
+        }
+        // Short answers
+        if (/short|concise|brief/.test(lower) && /answer|response|reply/.test(lower)) {
+          return { category: "preferences", key: "response_length", value: "short", title: "Response Length", importance: "high", explicit: true, confidence: "high" };
+        }
+        if (/detailed|long|explain/.test(lower) && /answer|response|reply/.test(lower)) {
+          return { category: "preferences", key: "response_length", value: "detailed", title: "Response Length", importance: "high", explicit: true, confidence: "high" };
+        }
+        // UI
+        if (/\bdark\b/.test(lower) && /\b(ui|theme|interface|design)\b/.test(lower)) {
+          return { category: "preferences", key: "ui_theme", value: "dark", title: "UI Theme", importance: "high", explicit: true, confidence: "high" };
+        }
+        if (/\blight\b/.test(lower) && /\b(ui|theme|interface|design)\b/.test(lower)) {
+          return { category: "preferences", key: "ui_theme", value: "light", title: "UI Theme", importance: "high", explicit: true, confidence: "high" };
+        }
+        if (/futuristic|robotic|premium/.test(lower) && /\b(ui|theme|interface|design)\b/.test(lower)) {
+          return { category: "preferences", key: "ui_style", value: f.replace(/^i\s+/i, "").slice(0, 60), title: "UI Style", importance: "medium", explicit: true, confidence: "high" };
+        }
+        // Name
+        if (/^(my )?name is\s+/i.test(fact) || /^call me\s+/i.test(fact)) {
+          const name = fact.replace(/^(my )?name is\s+/i, "").replace(/^call me\s+/i, "").trim();
+          if (isValidName(name)) {
+            return { category: "personal", key: "name", value: name, title: "Name", importance: "critical", explicit: true, confidence: "high" };
+          }
+        }
+        // Generic explicit fact — store cleaned, not raw sentence dump
+        if (isGarbageValue(f) || f.length > 120) return null;
+        return {
+          category: "other",
+          key: "fact_" + f.slice(0, 20).replace(/\s+/g, "_").toLowerCase(),
+          value: f.slice(0, 150),
+          title: f.slice(0, 40),
+          importance: "high",
+          explicit: true,
+          confidence: "high"
+        };
+      }
+
+      function extractMemories(userText) {
+        const results = [];
+        const t = userText.trim();
+        if (!t || looksLikeSecret(t)) return results;
+
+        // Explicit remember / save
+        const rememberMatch = t.match(/(?:please\s+)?(?:remember|yaad\s*rakh|yaad\s*rakho|note\s+(?:kar|down)|save\s+(?:this|that)|add\s+(?:this\s+)?to\s+(?:my\s+)?memory)(?:\s+(?:that|ki|this))?\s*[:\-]?\s*(.+)/i);
+        if (rememberMatch) {
+          const structured = structureExplicitMemory(rememberMatch[1]);
+          if (structured) results.push(structured);
+          return results;
+        }
+
+        // Name — strict
+        let m = t.match(/(?:my name is|mera naam(?:\s+hai)?)\s+([A-Za-z\u0900-\u097F][A-Za-z\u0900-\u097F'.\s]{0,35})/i);
+        if (m) {
+          const name = m[1].replace(/[.,!?].*$/, "").trim();
+          if (isValidName(name)) {
+            results.push({ category: "personal", key: "name", value: name, title: "Name", importance: "critical", confidence: "high" });
+          }
+        }
+        // Call me X
+        m = t.match(/^(?:please\s+)?call me\s+([A-Za-z\u0900-\u097F][A-Za-z\u0900-\u097F'.\s]{0,30})$/i);
+        if (m && isValidName(m[1].trim())) {
+          results.push({ category: "personal", key: "name", value: m[1].trim(), title: "Name", importance: "critical", confidence: "high" });
+        }
+
+        // Language — only extract the language token
+        if (/\b(prefer|usually|speak|talk|reply|baat|language)\b/i.test(t) && /\b(hinglish|hindi|english)\b/i.test(t)) {
+          const lang = (t.match(/\b(hinglish|hindi|english)\b/i) || [])[1];
+          if (lang && isValidLanguage(lang)) {
+            const val = lang.charAt(0).toUpperCase() + lang.slice(1).toLowerCase();
+            results.push({ category: "preferences", key: "preferred_language", value: val, title: "Preferred Language", importance: "high", confidence: "high" });
+          }
+        }
+
+        // UI theme
+        if (/\b(prefer|like|love)\b/i.test(t) && /\b(dark|light)\b/i.test(t) && /\b(ui|theme|interface|design|mode)\b/i.test(t)) {
+          const theme = /\bdark\b/i.test(t) ? "dark" : "light";
+          results.push({ category: "preferences", key: "ui_theme", value: theme, title: "UI Theme", importance: "high", confidence: "high" });
+          if (/futuristic|robotic|premium|minimal/i.test(t)) {
+            const style = (t.match(/\b(futuristic|robotic|premium|minimal(?:ist)?)\b/i) || [])[1];
+            if (style) results.push({ category: "preferences", key: "ui_style", value: style.toLowerCase(), title: "UI Style", importance: "medium", confidence: "high" });
+          }
+        }
+
+        // Response length
+        if (/\b(prefer|like|want)\b/i.test(t) && /\b(short|concise|brief|detailed|long)\b/i.test(t) && /\b(answer|response|reply|explanation)\b/i.test(t)) {
+          const len = /\b(short|concise|brief)\b/i.test(t) ? "short" : "detailed";
+          results.push({ category: "preferences", key: "response_length", value: len, title: "Response Length", importance: "high", confidence: "high" });
+        }
+
+        // Project — extract short name, not whole sentence
+        m = t.match(/(?:i(?:'m| am) (?:building|working on|creating|developing)|mera project|current project is)\s+(.+)/i);
+        if (m) {
+          let proj = m[1].replace(/[.,!?].*$/, "").trim();
+          // Take first meaningful chunk (max ~6 words)
+          proj = proj.split(/\s+/).slice(0, 6).join(" ");
+          if (proj.length > 2 && proj.length < 60 && !isGarbageValue(proj)) {
+            results.push({ category: "projects", key: "current_project", value: proj, title: "Current Project", importance: "high", confidence: "high" });
+          }
+        }
+
+        // Goal
+        m = t.match(/(?:my (?:main |biggest )?goal is|i want to(?:\s+achieve)?|mera goal)\s+(.+)/i);
+        if (m) {
+          let goal = m[1].replace(/[.,!?].*$/, "").trim().slice(0, 80);
+          if (goal.length > 3 && !isGarbageValue(goal)) {
+            results.push({ category: "goals", key: "goal_primary", value: goal, title: "Primary Goal", importance: "high", confidence: "medium" });
+          }
+        }
+
+        // Study subject
+        m = t.match(/(?:i(?:'m| am) studying|padh raha(?:\s+hoon)?|subject is)\s+(.+)/i);
+        if (m) {
+          const subj = m[1].replace(/[.,!?].*$/, "").trim().split(/\s+/).slice(0, 5).join(" ");
+          if (subj.length > 2 && subj.length < 50) {
+            results.push({ category: "study", key: "studying", value: subj, title: "Studying", importance: "medium", confidence: "high" });
+          }
+        }
+
+        // Routine — only with usually/always/every day
+        m = t.match(/(?:i usually|i always|every day|har roz|rozana)\s+(.+)/i);
+        if (m) {
+          let routine = m[1].replace(/[.,!?].*$/, "").trim().slice(0, 80);
+          if (routine.length > 3 && !isGarbageValue(routine)) {
+            let key = "routine_general";
+            if (/study|padh/i.test(routine)) key = "study_time";
+            if (/night|raat|evening|shaam/i.test(routine)) key = "study_time";
+            if (/morning|subah/i.test(routine)) key = "morning_routine";
+            results.push({ category: "routines", key, value: routine, title: "Routine", importance: "medium", confidence: "high" });
+          }
+        }
+
+        // Dislike
+        m = t.match(/i (?:don't like|dislike|hate)\s+(.+)/i);
+        if (m) {
+          const val = m[1].replace(/[.,!?].*$/, "").trim().slice(0, 60);
+          if (val.length > 2 && !isGarbageValue(val)) {
+            results.push({ category: "preferences", key: "dislike", value: val, title: "Dislike", importance: "medium", confidence: "high" });
+          }
+        }
+
+        return results.filter(r => r.confidence !== "low" && !isGarbageValue(r.value));
+      }
+
+      // Validate before writing profile fields
+      function validateProfileValue(section, field, value) {
+        if (!value || isGarbageValue(value)) return null;
+        const v = String(value).trim();
+        if (field === "name" || field === "preferredName" || field === "nickname") {
+          return isValidName(v) ? v : null;
+        }
+        if (field === "language") {
+          if (isValidLanguage(v)) return v.charAt(0).toUpperCase() + v.slice(1).toLowerCase();
+          // Extract language token from longer string
+          const lang = (v.match(/\b(hinglish|hindi|english)\b/i) || [])[1];
+          return lang ? lang.charAt(0).toUpperCase() + lang.slice(1).toLowerCase() : null;
+        }
+        if (field === "responseLength") {
+          if (/short|concise|brief/i.test(v)) return "short";
+          if (/detail|long/i.test(v)) return "detailed";
+          if (v.length > 30) return null;
+          return v.slice(0, 20);
+        }
+        if (field === "ui") {
+          if (/\bdark\b/i.test(v)) return "dark";
+          if (/\blight\b/i.test(v)) return "light";
+          return v.length <= 40 ? v : null;
+        }
+        if (v.length > 100) return v.slice(0, 100);
+        return v;
+      }
+
+      // Forget command detection
+      function parseForgetCommand(userText) {
+        const t = userText.trim();
+        const m = t.match(/(?:forget|bhool\s*jao|delete|remove)\s+(?:that\s+)?(?:i\s+)?(?:prefer|like|told you about|about)?\s*(.+)/i);
+        if (m) return m[1].replace(/[.,!?].*$/, "").trim();
+        if (/delete all (?:my )?memor/i.test(t) || /saari memory (delete|clear|hata)/i.test(t)) return "__ALL__";
+        return null;
+      }
+
+      function isMemoryQuery(userText) {
+        return /what do you remember|kya yaad|show (?:me )?(?:my )?memor|list (?:my )?memor|what do you know about me|what(?:'s| is) in my profile|my profile/i.test(userText);
+      }
+      function isProfileReset(userText) {
+        return /delete my profile|reset my profile|start over(?: with profile)?|profile delete/i.test(userText);
+      }
+
+      async function getRelevantMemories(userText) {
+        const all = await MemoryDB.getAll();
+        if (!all.length) return [];
+        const lower = (userText || "").toLowerCase();
+        // Always include high-importance personal facts
+        const high = all.filter(m => m.importance === "high");
+        // Keyword overlap for medium/low
+        const scored = all.map(m => {
+          const hay = (m.key + " " + m.value + " " + m.category).toLowerCase();
+          let score = m.importance === "high" ? 3 : m.importance === "medium" ? 1 : 0;
+          const words = lower.split(/\s+/).filter(w => w.length > 3);
+          for (const w of words) {
+            if (hay.includes(w)) score += 2;
+          }
+          // Topic hints
+          if (/name|naam/.test(lower) && m.key === "name") score += 5;
+          if (/project|jarvis/.test(lower) && m.category === "projects") score += 4;
+          if (/prefer|ui|theme|dark|light/.test(lower) && m.category === "preferences") score += 4;
+          if (/study|padh|subject/.test(lower) && m.category === "study") score += 4;
+          if (/goal/.test(lower) && m.category === "goals") score += 4;
+          return { m, score };
+        });
+        scored.sort((a, b) => b.score - a.score);
+        const picked = [];
+        const seen = new Set();
+        for (const { m, score } of scored) {
+          if (score < 2 && m.importance !== "high") continue;
+          if (seen.has(m.id)) continue;
+          seen.add(m.id);
+          picked.push(m);
+          if (picked.length >= 8) break;
+        }
+        // Ensure high importance are included
+        for (const h of high) {
+          if (!seen.has(h.id) && picked.length < 10) {
+            picked.push(h);
+            seen.add(h.id);
+          }
+        }
+        return picked;
+      }
+
+      function formatMemoryContext(memories) {
+        if (!memories || !memories.length) return "";
+        const lines = memories.map(m => {
+          const label = m.key === "name" ? "Name" : m.key.replace(/_/g, " ");
+          return `- [${m.category}] ${label}: ${m.value}`;
+        });
+        return "RELEVANT USER MEMORY (use only if helpful; do not invent facts):\n" + lines.join("\n");
+      }
+
+      function formatMemorySummary(memories) {
+        if (!memories.length) return "I don't have any long-term memories stored about you yet.";
+        const byCat = {};
+        for (const m of memories) {
+          if (!byCat[m.category]) byCat[m.category] = [];
+          byCat[m.category].push(m);
+        }
+        const parts = [];
+        for (const cat of CATEGORIES) {
+          if (!byCat[cat] || !byCat[cat].length) continue;
+          const items = byCat[cat].map(m => m.value).join("; ");
+          parts.push(cat.charAt(0).toUpperCase() + cat.slice(1) + ": " + items);
+        }
+        return "Here's what I remember about you. " + parts.join(". ") + ".";
+      }
+
+      // ─── Short-term conversation history ────────────────────────────
+      let messages = [{ role: "system", content: SYSTEM_PROMPT }];
+
+      function trimHistory() {
+        // Keep system + last MAX_HISTORY_TURNS user/assistant pairs
+        if (messages.length <= MAX_HISTORY_TURNS * 2 + 1) return;
+        const system = messages[0];
+        const rest = messages.slice(1);
+        const keep = rest.slice(-(MAX_HISTORY_TURNS * 2));
+        messages = [system, ...keep];
+      }
+
+      async function buildChatMessages(userText) {
+        const relevant = await getRelevantMemories(userText);
+        const memBlock = formatMemoryContext(relevant);
+
+        // Profile snapshot (compact)
+        let profileBlock = "";
+        try {
+          const profile = await ProfileDB.get();
+          const bits = [];
+          if (profile.personal?.name) bits.push("Name: " + profile.personal.name);
+          if (profile.personal?.preferredName) bits.push("Call them: " + profile.personal.preferredName);
+          if (profile.personal?.language) bits.push("Preferred language: " + profile.personal.language);
+          if (profile.personal?.responseLength) bits.push("Response length: " + profile.personal.responseLength);
+          if (profile.communication?.formality) bits.push("Formality: " + profile.communication.formality);
+          if (profile.communication?.humour) bits.push("Humour: " + profile.communication.humour);
+          if (profile.preferences?.ui) bits.push("UI preference: " + profile.preferences.ui);
+          if (profile.preferences?.dislikes) bits.push("Dislikes / avoid: " + profile.preferences.dislikes);
+          if (profile.workStudy?.status) bits.push("Work/Study: " + profile.workStudy.status);
+          if (profile.workStudy?.deadlines) bits.push("Deadlines: " + profile.workStudy.deadlines);
+          if (profile.goals?.shortTerm) bits.push("Goals: " + profile.goals.shortTerm);
+          if (profile.routines?.study) bits.push("Study routine: " + profile.routines.study);
+          if (bits.length) profileBlock = "USER PROFILE:\n" + bits.map(b => "- " + b).join("\n");
+        } catch (e) {}
+
+        // Relevant projects
+        let projectBlock = "";
+        try {
+          const projects = await ProjectDB.getAll();
+          if (projects.length) {
+            const lower = (userText || "").toLowerCase();
+            const matched = projects.filter(p =>
+              lower.includes(p.name.toLowerCase()) ||
+              (p.description && lower.includes(p.description.toLowerCase().slice(0, 20))) ||
+              /project|status|phase|task|kahan tak|progress/.test(lower)
+            );
+            const use = matched.length ? matched.slice(0, 3) : projects.filter(p => p.status === "active").slice(0, 2);
+            if (use.length) {
+              projectBlock = "PROJECT CONTEXT:\n" + use.map(p => {
+                let line = `- ${p.name}`;
+                if (p.status) line += ` [${p.status}]`;
+                if (p.phase) line += ` phase: ${p.phase}`;
+                if (p.pendingTasks) line += `; pending: ${p.pendingTasks}`;
+                if (p.completedTasks) line += `; done: ${p.completedTasks}`;
+                if (p.notes) line += `; notes: ${p.notes}`;
+                return line;
+              }).join("\n");
+            }
+          }
+        } catch (e) {}
+
+        const tone = toneHint(currentTone);
+        const parts = [SYSTEM_PROMPT];
+        if (profileBlock) parts.push(profileBlock);
+        if (memBlock) parts.push(memBlock);
+        if (projectBlock) parts.push(projectBlock);
+        if (tone) parts.push("CONVERSATIONAL TONE: " + tone);
+
+        const chatMsgs = [{ role: "system", content: parts.join("\n\n") }];
+        for (let i = 1; i < messages.length; i++) chatMsgs.push(messages[i]);
+        return chatMsgs;
+      }
+
+      // ─── App state (V1 continuous conversation) ─────────────────────
+      let conversationActive = false;
+      let wakeModeIdle = false;
+      let mediaRecorder = null;
+      let audioChunks = [];
+      let isRecording = false;
+      let currentAudio = null;
+      let isBusy = false;
+      let recordStartTime = 0;
+      let micStream = null;
+      let audioContext = null;
+      let analyser = null;
+      let vadInterval = null;
+      let silenceStart = null;
+      let speechFrames = 0;
+      let isUserSpeaking = false;
+      let ttsGuardUntil = 0;
+      let mode = "idle";
+
+      // DOM
+      const conversationEl = document.getElementById("conversation");
+      const emptyHint = document.getElementById("emptyHint");
+      const statusDot = document.getElementById("statusDot");
+      const statusText = document.getElementById("statusText");
+      const micBtn = document.getElementById("micBtn");
+      const micRing = document.getElementById("micRing");
+      const btnLabel = document.getElementById("btnLabel");
+      const clearBtn = document.getElementById("clearBtn");
+      const memoryBtn = document.getElementById("memoryBtn");
+      const playBtn = document.getElementById("playBtn");
+      const authHint = document.getElementById("authHint");
+      const wakeWordToggle = document.getElementById("wakeWordToggle");
+      const speedSelect = document.getElementById("speedSelect");
+      const memoryPanel = document.getElementById("memoryPanel");
+      const memoryList = document.getElementById("memoryList");
+      const memorySearch = document.getElementById("memorySearch");
+
+      function setStatus(state, text) {
+        statusDot.className = "status-dot " + state;
+        statusText.textContent = text;
+      }
+      function updateBtnLabel() {
+        if (conversationActive) btnLabel.textContent = "End Conversation";
+        else if (wakeModeIdle) btnLabel.textContent = "End Wake Mode";
+        else btnLabel.textContent = "Start Conversation";
+      }
+      function addMessage(role, text) {
+        if (emptyHint && emptyHint.parentNode) emptyHint.remove();
+        const div = document.createElement("div");
+        div.className = "msg " + (role === "user" ? "user" : "jarvis");
+        const label = document.createElement("span");
+        label.className = "label";
+        label.textContent = role === "user" ? "You" : "JARVIS";
+        div.appendChild(label);
+        div.appendChild(document.createTextNode(text));
+        conversationEl.appendChild(div);
+        conversationEl.scrollTop = conversationEl.scrollHeight;
+      }
+      function addError(text) {
+        if (emptyHint && emptyHint.parentNode) emptyHint.remove();
+        const div = document.createElement("div");
+        div.className = "msg error-msg";
+        div.textContent = text;
+        conversationEl.appendChild(div);
+        conversationEl.scrollTop = conversationEl.scrollHeight;
+      }
+      function addMemoryToast(text) {
+        const div = document.createElement("div");
+        div.className = "msg memory-toast";
+        div.textContent = text;
+        conversationEl.appendChild(div);
+        conversationEl.scrollTop = conversationEl.scrollHeight;
+        setTimeout(() => { try { div.remove(); } catch (e) {} }, 3500);
+      }
+
+      function extractText(value) {
+        if (value == null) return "";
+        if (typeof value === "string") return value.trim();
+        if (typeof value === "object") {
+          if (typeof value.text === "string") return value.text.trim();
+          if (value.message) {
+            const c = value.message.content;
+            if (typeof c === "string") return c.trim();
+            if (Array.isArray(c)) {
+              return c.filter(b => b && (b.type === "text" || typeof b.text === "string"))
+                      .map(b => b.text || "").join("").trim();
+            }
+          }
+          if (typeof value.content === "string") return value.content.trim();
+        }
+        return "";
+      }
+      function friendlyError(err) {
+        if (!err) return "Unknown error";
+        if (typeof err === "string") return err;
+        if (err.message) return err.message;
+        if (err.error) return String(err.error);
+        if (err.msg) return String(err.msg);
+        try { return JSON.stringify(err); } catch (e) { return String(err); }
+      }
+      function cleanTranscript(text) {
+        if (!text) return "";
+        let t = text.trim();
+        t = t.replace(/\b(\w+)(\s+\1\b)+/gi, "$1");
+        t = t.replace(/^(um+|uh+|erm+|hmm+|ah+)\s+/i, "");
+        return t.replace(/\s{2,}/g, " ").trim();
+      }
+      function cleanForSpeech(text) {
+        if (!text) return "";
+        let t = String(text);
+
+        // Strip markdown / code
+        t = t.replace(/```[\s\S]*?```/g, " ");
+        t = t.replace(/`([^`]+)`/g, "$1");
+        t = t.replace(/\*\*([^*]+)\*\*/g, "$1");
+        t = t.replace(/\*([^*]+)\*/g, "$1");
+        t = t.replace(/__([^_]+)__/g, "$1");
+        t = t.replace(/_([^_]+)_/g, "$1");
+        t = t.replace(/^#+\s*/gm, "");
+        t = t.replace(/^\s*[-*•]\s+/gm, "");
+        t = t.replace(/^\s*\d+[.)]\s+/gm, "");
+        t = t.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+        t = t.replace(/https?:\/\/\S+/g, " that link ");
+
+        // Symbols → spoken words
+        t = t.replace(/&/g, " and ");
+        t = t.replace(/%/g, " percent ");
+        t = t.replace(/\s*\/\s*/g, " slash ");
+        t = t.replace(/→|=>/g, " to ");
+        t = t.replace(/✓|✔/g, " done ");
+        t = t.replace(/★+/g, "");
+        t = t.replace(/[“”]/g, "");
+        t = t.replace(/[‘’]/g, "'");
+
+        // Soften common robotic openers if model still produces them
+        t = t.replace(/^(Certainly|Of course|Absolutely,? I can assist you with that|I understand your (query|request)|Based on (my|the) (analysis|information available)[^.]*\.)[,.]?\s*/i, "");
+        t = t.replace(/\s*Is there anything else I can help you with\??\s*$/i, "");
+        t = t.replace(/\s*How can I assist you today\??\s*$/i, "");
+
+        // Collapse whitespace; keep ellipses for natural pause
+        t = t.replace(/\s{2,}/g, " ").trim();
+        // Soft limit for voice (avoid monologues)
+        if (t.length > 450) {
+          const cut = t.slice(0, 450);
+          const last = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("? "), cut.lastIndexOf("! "));
+          t = last > 200 ? cut.slice(0, last + 1) : cut + "...";
+        }
+        return t;
+      }
+      function isHallucination(text) {
+        if (!text) return true;
+        const t = text.trim().toLowerCase().replace(/[.,!?]+$/g, "");
+        if (t.length < MIN_TRANSCRIPT_CHARS) return true;
+        for (const h of HALLUCINATION_PHRASES) {
+          if (t === h || t === h + "." || t === h + "!") return true;
+        }
+        if (t.split(/\s+/).length === 1 && t.length <= 3) return true;
+        return false;
+      }
+      function matchesWakeWord(text) {
+        if (!text) return false;
+        return WAKE_PATTERNS.some(re => re.test(text));
+      }
+
+      async function ensureSignedIn() {
+        try {
+          if (typeof puter === "undefined" || !puter.auth) throw new Error("Puter.js not loaded. Refresh the page.");
+          if (puter.auth.isSignedIn && puter.auth.isSignedIn()) { authHint.textContent = ""; return true; }
+          setStatus("busy", "Sign in required...");
+          authHint.textContent = "Allow the Puter sign-in popup...";
+          await puter.auth.signIn({ attempt_temp_user_creation: true });
+          authHint.textContent = "Signed in ✓";
+          setTimeout(() => authHint.textContent = "", 2500);
+          return true;
+        } catch (err) {
+          authHint.textContent = "";
+          addError("Puter sign-in failed or cancelled. Error: " + friendlyError(err));
+          setStatus("error", "Sign-in needed");
+          return false;
+        }
+      }
+
+      async function blobToWavFile(blob) {
+        try {
+          const arrayBuffer = await blob.arrayBuffer();
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+          const numChannels = 1, sampleRate = audioBuffer.sampleRate, length = audioBuffer.length;
+          const channelData = audioBuffer.getChannelData(0);
+          const buffer = new ArrayBuffer(44 + length * 2);
+          const view = new DataView(buffer);
+          function writeString(offset, str) { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); }
+          writeString(0, "RIFF"); view.setUint32(4, 36 + length * 2, true);
+          writeString(8, "WAVE"); writeString(12, "fmt ");
+          view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, numChannels, true);
+          view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * numChannels * 2, true);
+          view.setUint16(32, numChannels * 2, true); view.setUint16(34, 16, true);
+          writeString(36, "data"); view.setUint32(40, length * 2, true);
+          let offset = 44;
+          for (let i = 0; i < length; i++) {
+            let s = Math.max(-1, Math.min(1, channelData[i]));
+            view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            offset += 2;
+          }
+          audioCtx.close();
+          return new File([buffer], "recording.wav", { type: "audio/wav" });
+        } catch (e) {
+          const ext = (blob.type || "").includes("mp4") ? "mp4" : "webm";
+          return new File([blob], "recording." + ext, { type: blob.type || "audio/webm" });
+        }
+      }
+
+      function getVolume() {
+        if (!analyser) return 0;
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) sum += data[i];
+        return sum / data.length;
+      }
+
+      async function openMic() {
+        if (micStream) return true;
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
+        });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(micStream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.4;
+        source.connect(analyser);
+        return true;
+      }
+      function closeMic() {
+        stopVad();
+        stopMediaRecorder(true);
+        if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+        if (audioContext) { try { audioContext.close(); } catch (e) {} audioContext = null; analyser = null; }
+      }
+
+      async function startConversation(fromWake) {
+        if (conversationActive) return;
+        const ok = await ensureSignedIn();
+        if (!ok) return;
+        if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+          addError("Microphone / MediaRecorder not supported.");
+          setStatus("error", "Unsupported");
+          return;
+        }
+        try {
+          await openMic();
+          wakeModeIdle = false;
+          conversationActive = true;
+          micBtn.classList.add("active-convo");
+          micRing.classList.add("active");
+          updateBtnLabel();
+          if (!fromWake) {
+            let greet = "Hey. I'm here — what do you need?";
+            try {
+              const p = await ProfileDB.get();
+              const name = p.personal?.preferredName || p.personal?.name;
+              if (name) greet = "Hey " + name + ". What do you need?";
+              else if (!p.onboardingDone && !p.onboardingOffered) {
+                greet = "Hey. I'm here if you need anything. You can also say start personalization if you want me to learn a bit about you.";
+                p.onboardingOffered = true;
+                await ProfileDB.save(p);
+              }
+            } catch (e) {}
+            await playGreeting(greet);
+          }
+          if (conversationActive) beginListeningCycle();
+        } catch (err) {
+          if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+            addError("Microphone permission is required for voice conversation.");
+            setStatus("error", "Permission denied");
+          } else {
+            addError("Mic error: " + friendlyError(err));
+            setStatus("error", "Mic error");
+          }
+          endConversation();
+        }
+      }
+
+      function endConversation() {
+        conversationActive = false;
+        wakeModeIdle = false;
+        mode = "idle";
+        isBusy = false;
+        isRecording = false;
+        isUserSpeaking = false;
+        speechFrames = 0;
+        silenceStart = null;
+        stopVad();
+        stopMediaRecorder(true);
+        if (currentAudio) { try { currentAudio.pause(); currentAudio.currentTime = 0; } catch (e) {} currentAudio = null; }
+        closeMic();
+        micBtn.classList.remove("recording", "active-convo");
+        micRing.classList.remove("active");
+        playBtn.style.display = "none";
+        playBtn.onclick = null;
+        setStatus("ready", "Ready");
+        updateBtnLabel();
+      }
+
+      async function startWakeIdle() {
+        const ok = await ensureSignedIn();
+        if (!ok) return;
+        try {
+          await openMic();
+          wakeModeIdle = true;
+          conversationActive = false;
+          mode = "wake";
+          micBtn.classList.add("active-convo");
+          micRing.classList.add("active");
+          setStatus("listening", "Say \"Hey JARVIS\"...");
+          updateBtnLabel();
+          beginWakeCycle();
+        } catch (err) {
+          addError("Mic error: " + friendlyError(err));
+          endConversation();
+        }
+      }
+
+      function beginWakeCycle() {
+        if (!wakeModeIdle) return;
+        mode = "wake";
+        isUserSpeaking = false;
+        speechFrames = 0;
+        silenceStart = null;
+        audioChunks = [];
+        setStatus("listening", "Say \"Hey JARVIS\"...");
+        stopVad();
+        vadInterval = setInterval(wakeVadTick, 50);
+      }
+
+      function wakeVadTick() {
+        if (!wakeModeIdle || !analyser || isBusy) return;
+        const now = Date.now();
+        const vol = getVolume();
+        if (vol >= VOICE_THRESHOLD) {
+          speechFrames++;
+          silenceStart = null;
+          if (!isUserSpeaking && speechFrames >= SPEECH_START_FRAMES) {
+            isUserSpeaking = true;
+            startUtteranceRecording();
+            mode = "recording";
+          }
+        } else {
+          speechFrames = 0;
+          if (isUserSpeaking) {
+            if (silenceStart === null) silenceStart = now;
+            else if (now - silenceStart >= 900) {
+              if (now - recordStartTime >= 600) finishWakeUtterance();
+              else { cancelUtterance(); if (wakeModeIdle) beginWakeCycle(); }
+            }
+          }
+        }
+      }
+
+      async function finishWakeUtterance() {
+        stopVad();
+        isUserSpeaking = false;
+        const chunks = audioChunks.slice();
+        const mime = mediaRecorder?.mimeType || "audio/webm";
+        stopMediaRecorder(false);
+        if (!chunks.length) { if (wakeModeIdle) beginWakeCycle(); return; }
+        const rawBlob = new Blob(chunks, { type: mime });
+        if (rawBlob.size < 800) { if (wakeModeIdle) beginWakeCycle(); return; }
+        isBusy = true;
+        setStatus("busy", "Checking...");
+        try {
+          const file = new File([rawBlob], "wake.webm", { type: mime });
+          let result;
+          try { result = await puter.ai.speech2txt(file); }
+          catch (e) { result = await puter.ai.speech2txt(file, { model: "whisper-1" }); }
+          const text = cleanTranscript(extractText(result));
+          if (matchesWakeWord(text)) {
+            isBusy = false;
+            wakeModeIdle = false;
+            await playGreeting("Yes?");
+            conversationActive = true;
+            updateBtnLabel();
+            if (conversationActive) beginListeningCycle();
+          } else {
+            isBusy = false;
+            if (wakeModeIdle) beginWakeCycle();
+          }
+        } catch (err) {
+          isBusy = false;
+          if (wakeModeIdle) beginWakeCycle();
+        }
+      }
+
+      function stopVad() {
+        if (vadInterval) { clearInterval(vadInterval); vadInterval = null; }
+      }
+      function beginListeningCycle() {
+        if (!conversationActive) return;
+        mode = "listening";
+        isUserSpeaking = false;
+        speechFrames = 0;
+        silenceStart = null;
+        audioChunks = [];
+        setStatus("listening", "Listening...");
+        micBtn.classList.add("recording");
+        micRing.classList.add("active");
+        stopVad();
+        vadInterval = setInterval(vadTick, 50);
+      }
+      function vadTick() {
+        if (!conversationActive || !analyser) return;
+        if (mode === "processing") return;
+        const now = Date.now();
+        const vol = getVolume();
+        if (mode === "speaking") {
+          if (now < ttsGuardUntil) return;
+          if (vol >= BARGE_IN_THRESHOLD) {
+            if (currentAudio) { try { currentAudio.pause(); currentAudio.currentTime = 0; } catch (e) {} currentAudio = null; }
+            mode = "listening";
+            isBusy = false;
+            setStatus("listening", "Listening...");
+          } else return;
+        }
+        if (mode === "listening" || mode === "recording") {
+          if (vol >= VOICE_THRESHOLD) {
+            speechFrames++;
+            silenceStart = null;
+            if (!isUserSpeaking && speechFrames >= SPEECH_START_FRAMES) {
+              isUserSpeaking = true;
+              startUtteranceRecording();
+            }
+          } else {
+            speechFrames = 0;
+            if (isUserSpeaking) {
+              if (silenceStart === null) silenceStart = now;
+              else if (now - silenceStart >= SILENCE_DURATION) {
+                if (now - recordStartTime >= MIN_RECORDING_DURATION) finishUtterance();
+                else cancelUtterance();
+              }
+            }
+          }
+        }
+      }
+      function startUtteranceRecording() {
+        if (isRecording || !micStream) return;
+        audioChunks = [];
+        const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+        let mime = "";
+        for (const c of candidates) { if (MediaRecorder.isTypeSupported(c)) { mime = c; break; } }
+        try {
+          mediaRecorder = new MediaRecorder(micStream, mime ? { mimeType: mime } : {});
+          mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) audioChunks.push(e.data); };
+          mediaRecorder.onerror = () => cancelUtterance();
+          mediaRecorder.onstop = () => {};
+          mediaRecorder.start(200);
+          isRecording = true;
+          recordStartTime = Date.now();
+          mode = "recording";
+          setStatus("listening", "Listening to you...");
+        } catch (e) { cancelUtterance(); }
+      }
+      function stopMediaRecorder(release) {
+        if (mediaRecorder && (mediaRecorder.state === "recording" || mediaRecorder.state === "paused")) {
+          try { mediaRecorder.requestData(); } catch (e) {}
+          try { mediaRecorder.stop(); } catch (e) {}
+        }
+        mediaRecorder = null;
+        isRecording = false;
+        if (release) audioChunks = [];
+      }
+      function cancelUtterance() {
+        stopMediaRecorder(true);
+        isUserSpeaking = false;
+        speechFrames = 0;
+        silenceStart = null;
+        if (conversationActive) { mode = "listening"; setStatus("listening", "Listening..."); }
+      }
+      function finishUtterance() {
+        if (!isRecording) return;
+        stopVad();
+        isUserSpeaking = false;
+        speechFrames = 0;
+        silenceStart = null;
+        const chunks = audioChunks;
+        const mime = mediaRecorder?.mimeType || "audio/webm";
+        if (mediaRecorder && (mediaRecorder.state === "recording" || mediaRecorder.state === "paused")) {
+          try { mediaRecorder.requestData(); } catch (e) {}
+          mediaRecorder.onstop = () => { mediaRecorder = null; isRecording = false; processUtterance(chunks, mime); };
+          try { mediaRecorder.stop(); } catch (e) { mediaRecorder = null; isRecording = false; processUtterance(chunks, mime); }
+        } else {
+          isRecording = false;
+          processUtterance(chunks, mime);
+        }
+      }
+
+      // ─── Process utterance + memory ─────────────────────────────────
+      async function processUtterance(chunks, mime) {
+        if (!conversationActive) return;
+        mode = "processing";
+        isBusy = true;
+        setStatus("busy", "Transcribing...");
+
+        if (!chunks || !chunks.length) { isBusy = false; beginListeningCycle(); return; }
+        const rawBlob = new Blob(chunks, { type: mime || "audio/webm" });
+        if (rawBlob.size < 1200) { isBusy = false; beginListeningCycle(); return; }
+
+        const originalFile = new File([rawBlob], "recording." + ((mime || "").includes("mp4") ? "mp4" : "webm"), { type: mime || "audio/webm" });
+
+        let userText = "";
+        try {
+          let sttResult = null, lastErr = null;
+          try { sttResult = await puter.ai.speech2txt(originalFile); } catch (e1) { lastErr = e1; }
+          if (!sttResult) { try { sttResult = await puter.ai.speech2txt(originalFile, { model: "whisper-1" }); } catch (e2) { lastErr = e2; } }
+          if (!sttResult) {
+            try {
+              setStatus("busy", "Processing audio...");
+              const wavFile = await blobToWavFile(rawBlob);
+              sttResult = await puter.ai.speech2txt(wavFile);
+            } catch (e3) { lastErr = e3; }
+          }
+          if (!sttResult) throw lastErr || new Error("STT failed");
+          userText = cleanTranscript(extractText(sttResult));
+        } catch (err) {
+          addError("Transcription failed: " + friendlyError(err));
+          isBusy = false;
+          if (conversationActive) setTimeout(() => beginListeningCycle(), 600);
+          return;
+        }
+
+        if (isHallucination(userText)) {
+          isBusy = false;
+          if (conversationActive) beginListeningCycle();
+          return;
+        }
+
+        addMessage("user", userText);
+        messages.push({ role: "user", content: userText });
+        trimHistory();
+
+        // ── Memory commands (handled locally, still respond via AI or brief confirm) ──
+        let memoryNote = "";
+        const forgetTarget = parseForgetCommand(userText);
+        if (forgetTarget === "__ALL__") {
+          await MemoryDB.clear();
+          memoryNote = "All long-term memories cleared.";
+          addMemoryToast("All memories deleted");
+        } else if (forgetTarget) {
+          const all = await MemoryDB.getAll();
+          const lower = forgetTarget.toLowerCase();
+          const matches = all.filter(m =>
+            m.value.toLowerCase().includes(lower) ||
+            m.key.toLowerCase().includes(lower.replace(/\s+/g, "_"))
+          );
+          if (matches.length === 0) {
+            memoryNote = "No matching memory found to forget.";
+          } else if (matches.length === 1) {
+            await MemoryDB.delete(matches[0].id);
+            memoryNote = "Forgotten: " + matches[0].value;
+            addMemoryToast("Memory forgotten");
+          } else {
+            // Delete closest / all soft matches for simplicity in voice mode
+            for (const m of matches) await MemoryDB.delete(m.id);
+            memoryNote = "Forgotten " + matches.length + " related memories.";
+            addMemoryToast("Memories forgotten");
+          }
+        } else if (isProfileReset(userText)) {
+          await ProfileDB.clear();
+          interviewActive = false;
+          interviewIndex = 0;
+          const msg = "Your personal profile has been reset. Say start personalization if you want the interview again.";
+          messages.push({ role: "assistant", content: msg });
+          addMessage("jarvis", msg);
+          addMemoryToast("Profile reset");
+          await speakText(msg);
+          return;
+        } else if (/^(start personalization|start onboarding|update my profile|personalization interview|profile interview)/i.test(userText.trim())) {
+          interviewActive = true;
+          interviewIndex = await nextInterviewQuestionIndex(0);
+          if (interviewIndex >= INTERVIEW_QUESTIONS.length) {
+            interviewActive = false;
+            const msg = "Your profile already has the basics filled. You can still say remember that... to add more, or open the Profile panel.";
+            messages.push({ role: "assistant", content: msg });
+            addMessage("jarvis", msg);
+            await speakText(msg);
+            return;
+          }
+          const intro = "Sure — a few quick questions. You can say skip anytime. " + INTERVIEW_QUESTIONS[interviewIndex].q;
+          messages.push({ role: "assistant", content: intro });
+          addMessage("jarvis", intro);
+          await speakText(intro);
+          return;
+        } else if (/(?:call me|mujhe .* bulao|preferred name|change (?:my )?name|mera naam)\s+(.+)/i.test(userText)) {
+          const m = userText.match(/(?:call me|mujhe\s+(\S+)\s+bulao|preferred name(?: is)?|change (?:my )?name to|mera naam)\s*(.+)?/i);
+          let newName = "";
+          if (/call me\s+(.+)/i.test(userText)) newName = userText.match(/call me\s+(.+)/i)[1];
+          else if (/preferred name(?: is)?\s+(.+)/i.test(userText)) newName = userText.match(/preferred name(?: is)?\s+(.+)/i)[1];
+          else if (/change (?:my )?name to\s+(.+)/i.test(userText)) newName = userText.match(/change (?:my )?name to\s+(.+)/i)[1];
+          if (newName) {
+            newName = newName.replace(/[.,!?].*$/, "").trim();
+            await ProfileDB.setField("personal", "preferredName", newName);
+            await ProfileDB.setField("personal", "name", newName);
+            const msg = "Got it. I'll call you " + newName + ".";
+            messages.push({ role: "assistant", content: msg });
+            addMessage("jarvis", msg);
+            addMemoryToast("Profile updated");
+            await speakText(msg);
+            return;
+          }
+        } else if (isMemoryQuery(userText)) {
+          const all = await MemoryDB.getAll();
+          let summary = formatMemorySummary(all);
+          try {
+            const p = await ProfileDB.get();
+            const name = p.personal?.name || p.personal?.preferredName;
+            if (name) summary = "I know you as " + name + ". " + summary;
+            if (p.personal?.language) summary += " Preferred language: " + p.personal.language + ".";
+            if (p.preferences?.ui) summary += " UI: " + p.preferences.ui + ".";
+          } catch (e) {}
+          messages.push({ role: "assistant", content: summary });
+          addMessage("jarvis", summary);
+          await speakText(summary);
+          return;
+        } else if (interviewActive) {
+          // Handle interview answer / skip
+          const skip = /^(skip|skip this|baad mein|later|ask me later|pass|next)$/i.test(userText.trim());
+          const q = INTERVIEW_QUESTIONS[interviewIndex];
+          if (q && !skip) {
+            // Extract structured answer — never store whole unrelated sentence
+            let answer = userText.trim();
+            if (q.id === "name") {
+              const nm = answer.replace(/^(my name is|mera naam(?: hai)?|i am|i'm)\s+/i, "").trim();
+              answer = isValidName(nm) ? nm : (isValidName(answer) ? answer : null);
+            } else if (q.id === "language") {
+              const lang = (answer.match(/\b(hinglish|hindi|english)\b/i) || [])[1];
+              answer = lang || null;
+            } else if (q.id === "responseLength") {
+              answer = /short|concise|brief|direct/i.test(answer) ? "short" :
+                       /detail|long|explain/i.test(answer) ? "detailed" : answer.slice(0, 30);
+            } else if (q.id === "ui") {
+              answer = /\bdark\b/i.test(answer) ? "dark" : /\blight\b/i.test(answer) ? "light" : answer.slice(0, 40);
+            } else if (q.id === "formality") {
+              answer = /casual|informal|dosti/i.test(answer) ? "casual" :
+                       /professional|formal/i.test(answer) ? "professional" : answer.slice(0, 30);
+            } else if (q.id === "humour") {
+              answer = /yes|haan|thoda|little|sure/i.test(answer) ? "yes" :
+                       /no|nahi|straight/i.test(answer) ? "no" : answer.slice(0, 30);
+            } else {
+              // Cap length for free-form interview answers
+              answer = answer.slice(0, 100);
+              if (isGarbageValue(answer) && answer.split(/\s+/).length > 12) answer = answer.split(/\s+/).slice(0, 8).join(" ");
+            }
+            if (answer) {
+              await ProfileDB.setField(q.section, q.field, answer);
+              if (q.id === "name") await ProfileDB.setField("personal", "preferredName", answer);
+            }
+            if (q.id === "projects" && userText.trim().length > 3) {
+              await ProjectDB.upsert({
+                name: userText.trim().slice(0, 80),
+                description: userText.trim(),
+                status: "active",
+                phase: "started",
+                notes: "From personalization interview"
+              });
+            }
+            addMemoryToast("Profile updated");
+            memoryNote = "Noted.";
+          }
+          interviewIndex = await nextInterviewQuestionIndex(interviewIndex + 1);
+          if (interviewIndex >= INTERVIEW_QUESTIONS.length) {
+            interviewActive = false;
+            const p = await ProfileDB.get();
+            p.onboardingDone = true;
+            await ProfileDB.save(p);
+            memoryNote = "Thanks — I've saved what you shared. You can update anything later via the Profile panel or by saying remember or forget.";
+          } else {
+            memoryNote = "NEXT_INTERVIEW_Q:" + INTERVIEW_QUESTIONS[interviewIndex].q;
+          }
+        } else {
+          // Auto / explicit extract — structured + validated only
+          const extracted = extractMemories(userText);
+          for (const ex of extracted) {
+            if (looksLikeSecret(ex.value) || isGarbageValue(ex.value)) continue;
+            const { updated } = await MemoryDB.upsert(ex.category, ex.key, ex.value, ex.importance, {
+              title: ex.title,
+              confidence: ex.confidence || "high",
+              source: ex.explicit ? "user_explicit" : "conversation",
+              pinned: ex.importance === "critical"
+            });
+            addMemoryToast(updated ? "Memory updated" : "Memory saved");
+            if (ex.explicit) memoryNote = "Got it. I'll remember that.";
+
+            // Mirror only validated structured facts into profile
+            if (ex.key === "name") await ProfileDB.setField("personal", "name", ex.value);
+            if (ex.key === "preferred_language" || ex.key === "language") await ProfileDB.setField("personal", "language", ex.value);
+            if (ex.key === "response_length") await ProfileDB.setField("personal", "responseLength", ex.value);
+            if (ex.key === "ui_theme") await ProfileDB.setField("preferences", "ui", ex.value);
+            if (ex.key === "dislike") await ProfileDB.setField("preferences", "dislikes", ex.value);
+            if (ex.key === "study_time") await ProfileDB.setField("routines", "study", ex.value);
+            if (ex.key === "morning_routine") await ProfileDB.setField("routines", "morning", ex.value);
+            if (ex.key === "goal_primary") await ProfileDB.setField("goals", "shortTerm", ex.value);
+            if (ex.category === "projects" && ex.key === "current_project") {
+              const existing = await ProjectDB.findByName(ex.value);
+              if (existing) {
+                existing.updatedAt = new Date().toISOString();
+                await ProjectDB.upsert(existing);
+              } else {
+                await ProjectDB.upsert({ name: ex.value, status: "active", description: ex.value, phase: "active" });
+              }
+            }
+          }
+          const doneMatch = userText.match(/(?:i(?:'ve| have)? (?:finished|completed)|ho gaya|complete ho gaya)\s+(.+)/i);
+          if (doneMatch) {
+            const what = doneMatch[1].replace(/[.,!?].*$/, "").trim().slice(0, 60);
+            const proj = await ProjectDB.findByName(what) || (await ProjectDB.getAll())[0];
+            if (proj) {
+              proj.completedTasks = (proj.completedTasks ? proj.completedTasks + "; " : "") + what;
+              await ProjectDB.upsert(proj);
+              addMemoryToast("Project updated");
+            }
+          }
+        }
+
+        // Detect tone for this turn
+        currentTone = detectTone(userText);
+
+        // AI with relevant memory / profile / project context
+        let aiText = "";
+        try {
+          // Interview: ask next question conversationally without full AI lag when possible
+          if (memoryNote && memoryNote.startsWith("NEXT_INTERVIEW_Q:")) {
+            aiText = memoryNote.replace("NEXT_INTERVIEW_Q:", "").trim();
+            // Soft ack then question
+            if (/noted/i.test(memoryNote) || true) {
+              aiText = "Got it. " + aiText;
+            }
+            messages.push({ role: "assistant", content: aiText });
+            trimHistory();
+            addMessage("jarvis", aiText);
+            await speakText(aiText);
+            return;
+          }
+
+          setStatus("busy", "Thinking...");
+          const chatMsgs = await buildChatMessages(userText);
+          if (memoryNote) {
+            chatMsgs.push({
+              role: "system",
+              content: "Internal note (do not mention system details): " + memoryNote + " Confirm briefly to the user if appropriate."
+            });
+          }
+          const chatResult = await puter.ai.chat(chatMsgs);
+          aiText = extractText(chatResult);
+          if (!aiText) {
+            if (memoryNote && !memoryNote.startsWith("NEXT_")) aiText = memoryNote;
+            else {
+              addError("JARVIS returned an empty response.");
+              isBusy = false;
+              if (conversationActive) setTimeout(() => beginListeningCycle(), 600);
+              return;
+            }
+          }
+          messages.push({ role: "assistant", content: aiText });
+          trimHistory();
+          addMessage("jarvis", aiText);
+        } catch (err) {
+          addError("AI failed: " + friendlyError(err));
+          isBusy = false;
+          if (conversationActive) setTimeout(() => beginListeningCycle(), 800);
+          return;
+        }
+
+        await speakText(aiText);
+      }
+
+      async function playGreeting(text) {
+        try {
+          setStatus("busy", "Speaking...");
+          mode = "speaking";
+          isBusy = true;
+          await speakText(text, true);
+        } catch (e) { isBusy = false; }
+      }
+
+      function getTtsSpeedSetting() {
+        const rate = parseFloat((document.getElementById("speedSelect") || {}).value) || 1;
+        // ElevenLabs voice_settings.speed is typically ~0.7–1.2
+        if (rate <= 0.92) return 0.85;
+        if (rate >= 1.1) return 1.1;
+        return 1.0;
+      }
+
+      function getVoiceSettingsForStyle() {
+        const tone = ((document.getElementById("toneSelect") || {}).value) || "professional";
+        // stability high = more consistent/calm; lower = more expressive
+        if (tone === "calm") return { stability: 0.55, similarity_boost: 0.75, style: 0.2, use_speaker_boost: true, speed: getTtsSpeedSetting() };
+        if (tone === "friendly") return { stability: 0.35, similarity_boost: 0.8, style: 0.45, use_speaker_boost: true, speed: getTtsSpeedSetting() };
+        return { stability: 0.45, similarity_boost: 0.78, style: 0.3, use_speaker_boost: true, speed: getTtsSpeedSetting() };
+      }
+
+      async function synthesizeSpeech(spoken) {
+        const voiceId = ((document.getElementById("voiceSelect") || {}).value) || "21m00Tcm4TlvDq8ikWAM";
+        const model = ((document.getElementById("ttsModelSelect") || {}).value) || "eleven_multilingual_v2";
+        const voice_settings = getVoiceSettingsForStyle();
+
+        // 1) Primary: ElevenLabs multilingual neural voice
+        try {
+          const audio = await puter.ai.txt2speech(spoken, {
+            provider: "elevenlabs",
+            model: model,
+            voice: voiceId,
+            output_format: "mp3_44100_128",
+            voice_settings: voice_settings
+          });
+          if (audio) return { audio, provider: "elevenlabs" };
+        } catch (e1) {
+          console.warn("ElevenLabs TTS failed, trying fallback:", e1);
+        }
+
+        // 2) Fallback: OpenAI HD female (nova)
+        try {
+          const audio = await puter.ai.txt2speech(spoken, {
+            provider: "openai",
+            model: "tts-1-hd",
+            voice: "nova"
+          });
+          if (audio) return { audio, provider: "openai" };
+        } catch (e2) {
+          console.warn("OpenAI TTS failed, trying next:", e2);
+        }
+
+        // 3) Fallback: Gemini if available
+        try {
+          const audio = await puter.ai.txt2speech(spoken, {
+            provider: "gemini"
+          });
+          if (audio) return { audio, provider: "gemini" };
+        } catch (e3) {
+          console.warn("Gemini TTS failed, trying Polly:", e3);
+        }
+
+        // 4) Last resort: AWS Polly neural Joanna
+        try {
+          const audio = await puter.ai.txt2speech(spoken, {
+            provider: "aws-polly",
+            voice: "Joanna",
+            engine: "neural"
+          });
+          if (audio) return { audio, provider: "polly" };
+        } catch (e4) {
+          console.warn("Polly TTS failed:", e4);
+        }
+
+        // Absolute last resort: default Puter TTS
+        const audio = await puter.ai.txt2speech(spoken);
+        return { audio, provider: "default" };
+      }
+
+      async function speakText(text, isGreeting) {
+        let spoken = cleanForSpeech(text);
+        if (!spoken) {
+          isBusy = false;
+          if (conversationActive && !isGreeting) beginListeningCycle();
+          return;
+        }
+        try {
+          const toneEl = document.getElementById("toneSelect");
+          const tone = toneEl ? toneEl.value : "professional";
+          if (tone === "calm" && !/[.!?]$/.test(spoken)) spoken = spoken + ".";
+        } catch (e) {}
+
+        try {
+          setStatus("busy", "Speaking...");
+          mode = "speaking";
+
+          const { audio } = await synthesizeSpeech(spoken);
+          currentAudio = audio;
+
+          // Client-side rate as secondary control (ElevenLabs also gets voice_settings.speed)
+          const rate = parseFloat((document.getElementById("speedSelect") || {}).value) || 1;
+          try { audio.playbackRate = rate; } catch (e) {}
+          ttsGuardUntil = Date.now() + TTS_GUARD_MS;
+          stopVad();
+          if (conversationActive) vadInterval = setInterval(vadTick, 50);
+          return new Promise((resolve) => {
+            audio.onended = () => {
+              currentAudio = null; isBusy = false;
+              if (conversationActive && !isGreeting) beginListeningCycle();
+              resolve();
+            };
+            audio.onerror = () => {
+              currentAudio = null; isBusy = false;
+              if (conversationActive && !isGreeting) beginListeningCycle();
+              resolve();
+            };
+            audio.play().catch(() => {
+              playBtn.style.display = "inline-block";
+              playBtn.onclick = async () => {
+                playBtn.style.display = "none";
+                try { await audio.play(); }
+                catch (e2) {
+                  currentAudio = null; isBusy = false;
+                  if (conversationActive && !isGreeting) beginListeningCycle();
+                  resolve();
+                }
+              };
+              setStatus("busy", "Tap to play response");
+            });
+          });
+        } catch (err) {
+          if (!isGreeting) addError("TTS failed (text shown): " + friendlyError(err));
+          isBusy = false;
+          if (conversationActive && !isGreeting) setTimeout(() => beginListeningCycle(), 600);
+        }
+      }
+
+      // ─── Memory UI ──────────────────────────────────────────────────
+      function escapeHtml(s) {
+        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+      function timeAgo(iso) {
+        if (!iso) return "";
+        const d = (Date.now() - new Date(iso).getTime()) / 1000;
+        if (d < 60) return "just now";
+        if (d < 3600) return Math.floor(d / 60) + "m ago";
+        if (d < 86400) return Math.floor(d / 3600) + "h ago";
+        return Math.floor(d / 86400) + "d ago";
+      }
+      function importanceStars(imp) {
+        const map = { critical: 5, high: 4, medium: 3, low: 2 };
+        const n = map[imp] || 3;
+        return "★".repeat(n) + "☆".repeat(5 - n);
+      }
+
+      async function renderMemoryList(filter) {
+        const all = await MemoryDB.getAll();
+        const q = (filter || memorySearch.value || "").toLowerCase().trim();
+        const catFilter = (document.getElementById("memoryFilter") || {}).value || "";
+        let filtered = all;
+        if (catFilter) filtered = filtered.filter(m => m.category === catFilter);
+        if (q) {
+          filtered = filtered.filter(m =>
+            (m.value + " " + (m.title || "") + " " + m.key + " " + m.category + " " + (m.tags || []).join(" ")).toLowerCase().includes(q)
+          );
+        }
+        // Sort: pinned first, then importance, then recent
+        const rank = { critical: 4, high: 3, medium: 2, low: 1 };
+        filtered.sort((a, b) => {
+          if (!!b.pinned - !!a.pinned) return (!!b.pinned) - (!!a.pinned);
+          return (rank[b.importance] || 0) - (rank[a.importance] || 0) ||
+            new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
+        });
+
+        const pinned = all.filter(m => m.pinned).length;
+        const st = document.getElementById("statTotal");
+        const sp = document.getElementById("statPinned");
+        if (st) st.textContent = all.length;
+        if (sp) sp.textContent = pinned;
+
+        if (!filtered.length) {
+          memoryList.innerHTML = '<div class="mem-empty">No memories yet.<br/>Say “Remember that I prefer dark UI” or tap + Add Memory.</div>';
+          return;
+        }
+        const byCat = {};
+        for (const m of filtered) {
+          if (!byCat[m.category]) byCat[m.category] = [];
+          byCat[m.category].push(m);
+        }
+        let html = "";
+        for (const cat of CATEGORIES) {
+          if (!byCat[cat]) continue;
+          html += '<div class="mem-cat">' + (cat === "personal" ? "👤 " : cat === "preferences" ? "❤️ " : cat === "projects" ? "🚀 " : cat === "study" ? "📚 " : cat === "goals" ? "🎯 " : cat === "routines" ? "🔄 " : "🧠 ") + cat + '</div>';
+          for (const m of byCat[cat]) {
+            const title = m.title || m.key.replace(/_/g, " ");
+            html += '<div class="mem-item" data-id="' + m.id + '">' +
+              '<div class="mem-body">' +
+              '<div class="mem-key">' + (m.pinned ? "📌 " : "") + escapeHtml(title) +
+              ' · <span style="opacity:0.7">' + importanceStars(m.importance) + '</span></div>' +
+              '<div>' + escapeHtml(m.value) + '</div>' +
+              '<div style="font-size:0.68rem;color:var(--muted);margin-top:4px">' +
+              (m.source || "conversation") + " · " + timeAgo(m.updatedAt || m.createdAt) +
+              '</div></div>' +
+              '<div style="display:flex;flex-direction:column;gap:4px">' +
+              '<button class="del-btn pin-btn" data-id="' + m.id + '" title="Pin">' + (m.pinned ? "Unpin" : "Pin") + '</button>' +
+              '<button class="del-btn" data-id="' + m.id + '">Forget</button>' +
+              '</div></div>';
+          }
+        }
+        memoryList.innerHTML = html;
+        memoryList.querySelectorAll(".del-btn:not(.pin-btn)").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            await MemoryDB.delete(btn.getAttribute("data-id"));
+            renderMemoryList();
+            addMemoryToast("Memory forgotten");
+          });
+        });
+        memoryList.querySelectorAll(".pin-btn").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            const allM = await MemoryDB.getAll();
+            const mem = allM.find(x => x.id === btn.getAttribute("data-id"));
+            if (mem) {
+              mem.pinned = !mem.pinned;
+              await MemoryDB.put(mem);
+              renderMemoryList();
+            }
+          });
+        });
+      }
+      function openMemoryPanel() {
+        memoryPanel.classList.add("open");
+        renderMemoryList();
+      }
+      function closeMemoryPanel() {
+        memoryPanel.classList.remove("open");
+      }
+
+      // ─── Buttons ────────────────────────────────────────────────────
+      micBtn.addEventListener("click", () => {
+        if (conversationActive || wakeModeIdle) endConversation();
+        else if (wakeWordToggle.checked) startWakeIdle();
+        else startConversation(false);
+      });
+      wakeWordToggle.addEventListener("change", () => {
+        if (!wakeWordToggle.checked && wakeModeIdle) endConversation();
+      });
+
+      // Test Voice — preview current ElevenLabs settings without starting conversation
+      const testVoiceBtn = document.getElementById("testVoiceBtn");
+      if (testVoiceBtn) {
+        testVoiceBtn.addEventListener("click", async () => {
+          if (isBusy || mode === "speaking") return;
+          try {
+            await ensureSignedIn();
+            testVoiceBtn.disabled = true;
+            setStatus("busy", "Testing voice...");
+            const sample = "Hey. I'm JARVIS, your personal assistant. Haan, bilkul ready hoon. Batao, kya karna hai?";
+            const spoken = cleanForSpeech(sample);
+            const { audio, provider } = await synthesizeSpeech(spoken);
+            if (currentAudio) {
+              try { currentAudio.pause(); } catch (e) {}
+            }
+            currentAudio = audio;
+            const rate = parseFloat((document.getElementById("speedSelect") || {}).value) || 1;
+            try { audio.playbackRate = rate; } catch (e) {}
+            await new Promise((resolve) => {
+              audio.onended = () => resolve();
+              audio.onerror = () => resolve();
+              audio.play().catch(() => resolve());
+            });
+            currentAudio = null;
+            setStatus("ready", "Voice OK (" + provider + ")");
+            setTimeout(() => setStatus("ready", "Ready"), 2000);
+          } catch (err) {
+            addError("Voice test failed: " + friendlyError(err));
+            setStatus("error", "Voice test failed");
+          } finally {
+            testVoiceBtn.disabled = false;
+          }
+        });
+      }
+
+      clearBtn.addEventListener("click", () => {
+        if (conversationActive || wakeModeIdle) endConversation();
+        messages = [{ role: "system", content: SYSTEM_PROMPT }];
+        conversationEl.innerHTML = "";
+        const hint = document.createElement("div");
+        hint.className = "empty-hint";
+        hint.id = "emptyHint";
+        hint.innerHTML = "Press the button once to start a continuous conversation.<br />Speak naturally — JARVIS listens, replies, and keeps listening.<br />Memory persists across sessions. Try “Remember that…”";
+        conversationEl.appendChild(hint);
+        setStatus("ready", "Ready");
+        updateBtnLabel();
+      });
+      memoryBtn.addEventListener("click", openMemoryPanel);
+      document.getElementById("closeMemoryBtn").addEventListener("click", closeMemoryPanel);
+      document.getElementById("closeMemoryBtn2").addEventListener("click", closeMemoryPanel);
+      memoryPanel.addEventListener("click", (e) => { if (e.target === memoryPanel) closeMemoryPanel(); });
+      memorySearch.addEventListener("input", () => renderMemoryList());
+      const memFilterEl = document.getElementById("memoryFilter");
+      if (memFilterEl) memFilterEl.addEventListener("change", () => renderMemoryList());
+      document.getElementById("clearAllMemoryBtn").addEventListener("click", async () => {
+        if (!confirm("Delete ALL long-term memories?")) return;
+        await MemoryDB.clear();
+        renderMemoryList();
+        addMemoryToast("All memories deleted");
+      });
+
+      // Manual Add Memory
+      const addMemoryModal = document.getElementById("addMemoryModal");
+      document.getElementById("addMemoryBtn").addEventListener("click", () => {
+        document.getElementById("memTitle").value = "";
+        document.getElementById("memContent").value = "";
+        document.getElementById("memPinned").checked = false;
+        addMemoryModal.classList.add("open");
+      });
+      function closeAddMem() { addMemoryModal.classList.remove("open"); }
+      document.getElementById("closeAddMemBtn").addEventListener("click", closeAddMem);
+      document.getElementById("cancelAddMemBtn").addEventListener("click", closeAddMem);
+      addMemoryModal.addEventListener("click", (e) => { if (e.target === addMemoryModal) closeAddMem(); });
+      document.getElementById("saveMemoryBtn").addEventListener("click", async () => {
+        const title = document.getElementById("memTitle").value.trim();
+        const content = document.getElementById("memContent").value.trim();
+        const category = document.getElementById("memCategory").value;
+        const importance = document.getElementById("memImportance").value;
+        const pinned = document.getElementById("memPinned").checked;
+        if (!content) { alert("Content is required"); return; }
+        if (looksLikeSecret(content)) { alert("Secrets cannot be stored"); return; }
+        const key = "manual_" + (title || content).slice(0, 24).replace(/\s+/g, "_").toLowerCase() + "_" + Date.now().toString(36);
+        await MemoryDB.upsert(category, key, content, importance, {
+          title: title || content.slice(0, 40),
+          confidence: "high",
+          source: "manual",
+          pinned
+        });
+        // Mirror name if user manually saves name-like entry
+        if (category === "personal" && /name/i.test(title || "") && isValidName(content)) {
+          await ProfileDB.setField("personal", "name", content);
+        }
+        closeAddMem();
+        renderMemoryList();
+        addMemoryToast("Memory saved");
+      });
+
+      // Profile UI
+      const profilePanel = document.getElementById("profilePanel");
+      const profileBody = document.getElementById("profileBody");
+      const profileBtn = document.getElementById("profileBtn");
+
+      async function renderProfile() {
+        const p = await ProfileDB.get();
+        // Meaningful completion only
+        const checks = [
+          p.personal?.name, p.personal?.language, p.personal?.responseLength,
+          p.communication?.formality, p.preferences?.ui,
+          p.workStudy?.status, p.goals?.shortTerm, p.routines?.study
+        ];
+        const filled = checks.filter(v => v && String(v).trim() && !isGarbageValue(v)).length;
+        const pct = Math.round((filled / checks.length) * 100);
+        document.getElementById("profilePctLabel").textContent = "Profile Completion: " + pct + "%";
+        document.getElementById("profileFill").style.width = pct + "%";
+
+        const labelMap = {
+          name: "Name", preferredName: "Preferred name", nickname: "Nickname",
+          language: "Preferred language", style: "Style", responseLength: "Answer length",
+          formality: "Tone", humour: "Humour", directness: "Directness", honesty: "Honesty",
+          ui: "UI theme", design: "Design", apps: "Apps", devices: "Devices",
+          likes: "Likes", dislikes: "Dislikes",
+          movies: "Movies", shows: "Shows", games: "Games", music: "Music",
+          status: "Current focus", subjects: "Subjects", difficult: "Difficult topics",
+          goals: "Focus goals", method: "Method", deadlines: "Deadlines",
+          shortTerm: "Short-term", longTerm: "Long-term", skills: "Skills",
+          morning: "Morning", study: "Study time", evening: "Evening", workout: "Workout", forgets: "Often forgets"
+        };
+
+        function section(title, obj) {
+          let rows = "";
+          let any = false;
+          for (const [k, v] of Object.entries(obj || {})) {
+            if (v && String(v).trim() && !isGarbageValue(v)) {
+              any = true;
+              const lab = labelMap[k] || k;
+              rows += '<div class="prof-row"><span class="pk">' + lab + '</span><span class="pv">' +
+                escapeHtml(String(v)) + '</span></div>';
+            }
+          }
+          if (!any) rows = '<div class="prof-empty">Not set yet</div>';
+          return '<div class="prof-section"><h3>' + title + '</h3>' + rows + '</div>';
+        }
+
+        const displayName = p.personal?.preferredName || p.personal?.name || "Unknown";
+        let html = '<div style="text-align:center;padding:8px 0 12px">' +
+          '<div style="font-size:1.1rem;color:var(--accent);font-weight:600">' + escapeHtml(displayName) + '</div>' +
+          '<div style="font-size:0.75rem;color:var(--muted);margin-top:4px">JARVIS KNOWS YOU</div></div>';
+
+        html += section("👤 Identity", p.personal) +
+          section("🗣 Communication", p.communication) +
+          section("❤️ Preferences", p.preferences) +
+          section("🎬 Entertainment", p.entertainment) +
+          section("📚 Study / Work", p.workStudy) +
+          section("🎯 Goals", p.goals) +
+          section("🔄 Routines", p.routines);
+
+        const projects = await ProjectDB.getAll();
+        if (projects.length) {
+          html += '<div class="prof-section"><h3>🚀 Active Projects</h3>';
+          for (const proj of projects) {
+            html += '<div class="prof-row"><span class="pk">' + escapeHtml(proj.name || "") +
+              '</span><span class="pv">' + escapeHtml(proj.status || "") +
+              (proj.phase ? " · " + escapeHtml(proj.phase) : "") + '</span></div>';
+          }
+          html += '</div>';
+        }
+
+        profileBody.innerHTML = html;
+      }
+
+      function openProfilePanel() {
+        profilePanel.classList.add("open");
+        renderProfile();
+      }
+      function closeProfilePanel() {
+        profilePanel.classList.remove("open");
+      }
+
+      profileBtn.addEventListener("click", openProfilePanel);
+      document.getElementById("closeProfileBtn").addEventListener("click", closeProfilePanel);
+      document.getElementById("closeProfileBtn2").addEventListener("click", closeProfilePanel);
+      profilePanel.addEventListener("click", (e) => { if (e.target === profilePanel) closeProfilePanel(); });
+
+      document.getElementById("clearProfileBtn").addEventListener("click", async () => {
+        if (!confirm("Reset personal profile? (Memories and projects are kept separate.)")) return;
+        await ProfileDB.clear();
+        interviewActive = false;
+        interviewIndex = 0;
+        renderProfile();
+        addMemoryToast("Profile reset");
+      });
+
+      document.getElementById("startInterviewBtn").addEventListener("click", async () => {
+        closeProfilePanel();
+        interviewActive = true;
+        interviewIndex = 0;
+        // Ensure conversation is running
+        if (!conversationActive) {
+          await startConversation(false);
+        }
+        // After greeting path, inject first question
+        const intro = "Before I become your personal JARVIS, I'd like to understand you a little better. You can skip any question. " + INTERVIEW_QUESTIONS[0].q;
+        messages.push({ role: "assistant", content: intro });
+        addMessage("jarvis", intro);
+        await speakText(intro);
+      });
+
+      // Init + migrate/cleanup corrupted profile values from V3
+      MemoryDB.init().then(async () => {
+        try {
+          const p = await ProfileDB.get();
+          let changed = false;
+          if (p.personal) {
+            if (p.personal.name && !isValidName(p.personal.name)) { p.personal.name = ""; changed = true; }
+            if (p.personal.preferredName && !isValidName(p.personal.preferredName)) { p.personal.preferredName = ""; changed = true; }
+            if (p.personal.language && !isValidLanguage(p.personal.language)) {
+              const lang = (String(p.personal.language).match(/\b(hinglish|hindi|english)\b/i) || [])[1];
+              p.personal.language = lang ? lang.charAt(0).toUpperCase() + lang.slice(1).toLowerCase() : "";
+              changed = true;
+            }
+            if (p.personal.responseLength && isGarbageValue(p.personal.responseLength)) {
+              p.personal.responseLength = /short|concise/i.test(p.personal.responseLength) ? "short" :
+                /detail/i.test(p.personal.responseLength) ? "detailed" : "";
+              changed = true;
+            }
+          }
+          // Clean garbage memory entries that look like full AI sentences
+          const all = await MemoryDB.getAll();
+          for (const m of all) {
+            if (isGarbageValue(m.value) || (m.key === "name" && !isValidName(m.value))) {
+              await MemoryDB.delete(m.id);
+            }
+          }
+          if (changed) await ProfileDB.save(p);
+        } catch (e) { console.warn("Migration cleanup", e); }
+      }).catch(e => console.warn("Memory DB init failed", e));
+      setTimeout(() => {
+        try {
+          if (puter?.auth?.isSignedIn?.()) {
+            authHint.textContent = "Signed in with Puter ✓";
+            setTimeout(() => authHint.textContent = "", 3000);
+          }
+        } catch (e) {}
+      }, 900);
+      setStatus("ready", "Ready");
+      updateBtnLabel();
+    })();
+  </script>
+</body>
+</html>
